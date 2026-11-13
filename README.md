@@ -81,3 +81,15 @@ UDP on the Amiga itself is checked by GFOpenBoost's `UDPLT`.
 `compat/gfot_ifq_amiga.c` gets from the stack, for a lab run (it needs
 bsdsocket.library 4). The host tests run the same probe on the host's
 interfaces.
+
+## Building for AmigaOS
+
+    STOVE=.../stoves/os32-gcc16-open6 GFOPENBOOST_SDK=<sdk> OUT=out JOBS=2 \
+        tools/stove/build-amiga.sh
+
+builds libtorrent with `cmake/toolchain-m68k-amigaos.cmake` (68040, Asio on
+one task, no OpenSSL, no GnuTLS) and links the lab tests against it:
+`OneTask` (`tests/one_task_test.cpp`, the host test's transfers and lookup,
+run in `T:`) and `IfqProbe`. It also unpacks the pinned `event.library` for
+the lab's `LIBS:`. The SDK needs GFOpenBoost's patch 0005 (#8); the script
+stops if it is missing.

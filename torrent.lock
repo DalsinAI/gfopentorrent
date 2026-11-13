@@ -14,3 +14,8 @@ TRY_SIGNAL_COMMIT=105cce59972f925a33aa6b1c3109e4cd3caf583d
 PICOTORRENT_URL=https://github.com/picotorrent/picotorrent
 PICOTORRENT_TAG=v0.25.0
 PICOTORRENT_COMMIT=c2ad8e2d69773293e116ac08e228d21d98a55892
+# event.library (GFOpenEvent, ours), which GFOpenBoost's Asio waits through;
+# the package puts it in LIBS:
+GFOPENEVENT_TAG=v1.1-rc2
+GFOPENEVENT_URL=https://github.com/DalsinAI/gfopenevent/releases/download/v1.1-rc2/GFOpenEvent-1.1-rc2.zip
+GFOPENEVENT_SHA256=3bbb04429ecc850982b6cbcaf9ba629a06d914b6b951d6b69cd66c33c36c8ca7

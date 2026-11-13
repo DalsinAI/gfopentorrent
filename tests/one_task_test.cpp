@@ -26,7 +26,9 @@
 #include <boost/asio/steady_timer.hpp>
 #include <chrono>
 #include <cstdio>
+#ifdef __linux__
 #include <dirent.h>
+#endif
 #include <fstream>
 #include <memory>
 #include <string>
@@ -34,7 +36,7 @@
 #include <vector>
 
 #if !defined TORRENT_AMIGA || !defined BOOST_ASIO_DISABLE_THREADS
-#error "build with -DTORRENT_AMIGA_HOST_TEST -DBOOST_ASIO_DISABLE_THREADS"
+#error "build with -DTORRENT_AMIGA_HOST_TEST -DBOOST_ASIO_DISABLE_THREADS (the Amiga build has both)"
 #endif
 
 namespace lt = libtorrent;
@@ -48,8 +50,12 @@ static void check(const char *what, bool ok, const std::string &detail = std::st
     if (!ok) failed++;
 }
 
+// Linux: the process's threads. The Amiga build is the lab run of this same
+// file (tools/stove/build-amiga.sh); there a second task would show as
+// a bsdsocket.library failure, so it counts 1.
 static int threads_now()
 {
+#ifdef __linux__
     int n = 0;
     if (DIR *d = opendir("/proc/self/task")) {
         while (dirent *e = readdir(d))
@@ -57,6 +63,9 @@ static int threads_now()
         closedir(d);
     }
     return n;
+#else
+    return 1;
+#endif
 }
 
 static lt::settings_pack pack(bool utp)
@@ -178,8 +187,13 @@ static void lookup_on_one_task()
 int main()
 {
     check("one thread at start", threads_now() == 1, std::to_string(threads_now()));
+#if defined __amigaos__ || defined __AMIGA__
+    const char *dir = "T:gfot1";
+    mkdir(dir, 0755);
+#else
     char tmpl[] = "/tmp/gfot1-XXXXXX";
     const char *dir = mkdtemp(tmpl);
+#endif
     check("temp dir", dir != nullptr);
     if (dir) {
         run_transfer(dir, true);
