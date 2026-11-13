@@ -22,6 +22,14 @@ libtorrent 2.0 has no WebTorrent (2.1 adds it, with libdatachannel under
 MPL-2.0). HTTPS trackers go through the gfopentls shim, never GnuTLS.
 The BSD-3 notices go in the About box and the docs.
 
+The UI is drawn through gfopenwxtoolkit (wxWidgets on GFOpenLayout), as
+the 13 Nov brief says. wxWidgets is under the wxWindows Library Licence: the
+LGPL plus an exception that allows binaries, static ones included, under
+the program's own terms. Franklin's licence review of 13 Nov reads it that
+way, so it is not counted as LGPL code here; no wx source is copied into this
+repository. Boost (BSL-1.0), fmt and nlohmann-json (MIT) and SQLite
+(public domain), which PicoTorrent also uses, are permissive.
+
 ## libtorrent on AmigaOS
 
 `patches/libtorrent/0001-amiga-platform.patch` fills in libtorrent's Amiga
