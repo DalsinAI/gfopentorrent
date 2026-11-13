@@ -51,7 +51,7 @@ WORK="$WORK/src" sh "$HERE/scripts/fetch-sources.sh" libtorrent
 LT="$WORK/src/libtorrent"
 B="$WORK/amiga-build"
 BOOST_CMAKE=$(ls -d "$SDK"/lib/cmake/Boost-* | head -1)
-cmake -S "$LT" -B "$B" -DCMAKE_TOOLCHAIN_FILE="$HERE/cmake/toolchain-m68k-amigaos.cmake" \
+cmake -G "Unix Makefiles" -S "$LT" -B "$B" -DCMAKE_TOOLCHAIN_FILE="$HERE/cmake/toolchain-m68k-amigaos.cmake" \
     -DAMIGA_TOOLCHAIN="$TC" -DGFOPENBOOST_SDK="$SDK" -DBoost_DIR="$BOOST_CMAKE" \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DBUILD_SHARED_LIBS=OFF \
     -Dencryption=OFF -Ddeprecated-functions=OFF -Dlogging=OFF \
@@ -72,8 +72,11 @@ rm -f "$OUT/libgfotcompat.a"
 m68k-amigaos-ar rcs "$OUT/libgfotcompat.a" "$B/gfot_ifq_amiga.o" "$B/gfot_ifq_common.o"
 
 LIBS="$OUT/libtorrent-rasterbar.a $OUT/libgfotcompat.a -L$SDK/lib -lboost_asio -lsocket -lpthread -latomic -lm"
-m68k-amigaos-g++ $CF -std=gnu++17 -DBOOST_ASIO_DISABLE_THREADS -DBOOST_ASIO_SEPARATE_COMPILATION \
-    -DTORRENT_ABI_VERSION=100 -DTORRENT_NO_DEPRECATE -DTORRENT_DISABLE_LOGGING \
+# libtorrent's own compile definitions, so the test sees its structs
+LTDEFS=$(sed -n 's/^CXX_DEFINES = //p' "$B/CMakeFiles/torrent-rasterbar.dir/flags.make" \
+    | tr ' ' '\n' | grep -v '^-DTORRENT_BUILDING_LIBRARY$' | tr '\n' ' ')
+[ -n "$LTDEFS" ] || { echo "no definitions in libtorrent's flags.make"; exit 1; }
+m68k-amigaos-g++ $CF -std=gnu++17 -DBOOST_ASIO_DISABLE_THREADS -DBOOST_ASIO_SEPARATE_COMPILATION $LTDEFS \
     -I"$SDK/include" -I"$LT/include" -I"$HERE/compat" \
     -o "$OUT/OneTask" "$HERE/tests/one_task_test.cpp" $LIBS 2> "$B.link.log" \
     || { grep -E 'undefined|error' "$B.link.log" | sort -u | head -40; exit 1; }
