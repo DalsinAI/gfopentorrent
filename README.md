@@ -62,6 +62,10 @@ the window's MsgPort in the same wait as the sockets.
 dos.library's `Seek()` is, so patch 0002 drops libtorrent's 64-bit asserts
 and a seek or size past 2 GiB fails with EFBIG.
 
+**No try_signal.** It catches SIGBUS from memory-mapped files; with no
+mmap there's nothing to catch, and libnix has no `sigjmp_buf`. Patch 0003
+adds a `try-signal` CMake option, and the Amiga build turns it off.
+
 **No peer encryption yet.** libtorrent is built with `-Dencryption=OFF`
 (no OpenSSL, no GnuTLS), which also turns off protocol encryption (PE/MSE).
 Peers that insist on it won't connect. PE needs only RC4 and a

@@ -54,7 +54,7 @@ BOOST_CMAKE=$(ls -d "$SDK"/lib/cmake/Boost-* | head -1)
 cmake -G "Unix Makefiles" -S "$LT" -B "$B" -DCMAKE_TOOLCHAIN_FILE="$HERE/cmake/toolchain-m68k-amigaos.cmake" \
     -DAMIGA_TOOLCHAIN="$TC" -DGFOPENBOOST_SDK="$SDK" -DBoost_DIR="$BOOST_CMAKE" \
     -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 -DBUILD_SHARED_LIBS=OFF \
-    -Dencryption=OFF -Ddeprecated-functions=OFF -Dlogging=OFF \
+    -Dencryption=OFF -Dtry-signal=OFF -Ddeprecated-functions=OFF -Dlogging=OFF \
     -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=TRUE \
     > "$B.configure.log" 2>&1 || { tail -40 "$B.configure.log"; exit 1; }
 cmake --build "$B" --target torrent-rasterbar -j "$JOBS" > "$B.build.log" 2>&1 \
@@ -65,6 +65,9 @@ m68k-amigaos-nm -A "$B/libtorrent-rasterbar.a" > "$B.nm.txt" 2>"$B.nm.err" \
 [ -s "$B.nm.txt" ] || { echo "nm listed no symbols"; exit 1; }
 if grep -qi gnutls "$B.nm.txt"; then
     echo "libtorrent links GnuTLS"; exit 1
+fi
+if grep -q '_ZN3sig' "$B.nm.txt"; then
+    echo "libtorrent still has try_signal"; exit 1
 fi
 cp "$B/libtorrent-rasterbar.a" "$OUT/"
 

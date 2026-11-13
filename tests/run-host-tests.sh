@@ -23,7 +23,7 @@ LT="$WORK/libtorrent"
 B="$WORK/../host-build"
 mkdir -p "$B"
 cmake -S "$LT" -B "$B" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
-    -Dencryption=OFF -Ddeprecated-functions=OFF -DCMAKE_CXX_STANDARD=17 \
+    -Dencryption=OFF -Dtry-signal=OFF -Ddeprecated-functions=OFF -DCMAKE_CXX_STANDARD=17 \
     -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=TRUE \
     -DCMAKE_CXX_FLAGS="-DTORRENT_AMIGA_HOST_TEST" > "$B/configure.log"
 cmake --build "$B" --target torrent-rasterbar -j "$JOBS" > "$B/build.log" 2>&1 \
@@ -38,6 +38,12 @@ if grep -qi gnutls "$B/nm.txt"; then
     echo "FAIL libtorrent links GnuTLS"; exit 1
 fi
 echo "PASS no GnuTLS in libtorrent"
+# no mmap on the Amiga, so no try_signal (libnix has no sigjmp_buf):
+# patch 0003 builds without it, and nothing may still need it
+if grep -q '_ZN3sig' "$B/nm.txt"; then
+    echo "FAIL libtorrent still has try_signal"; exit 1
+fi
+echo "PASS libtorrent built without try_signal"
 # patch 0001 repeats struct gfot_iface for enum_net.cpp: it must stay
 # the same as compat/gfot_ifq.h's
 gfot_struct() { sed -n '/^+\{0,1\}struct gfot_iface/,/};/p' "$1" | sed 's/^+//; s/\/\*.*\*\///' | tr -d ' \t\n'; }
@@ -90,7 +96,7 @@ echo "overlay: $F (Boost $(sed -n 's/^#define BOOST_LIB_VERSION "\(.*\)"/\1/p' "
 B1="$WORK/../host-1task"
 mkdir -p "$B1"
 cmake -S "$LT" -B "$B1" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
-    -Dencryption=OFF -Ddeprecated-functions=OFF -DCMAKE_CXX_STANDARD=17 \
+    -Dencryption=OFF -Dtry-signal=OFF -Ddeprecated-functions=OFF -DCMAKE_CXX_STANDARD=17 \
     -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=TRUE \
     -DCMAKE_CXX_FLAGS="-I$OV -DTORRENT_AMIGA_HOST_TEST -DBOOST_ASIO_DISABLE_THREADS" > "$B1/configure.log"
 cmake --build "$B1" --target torrent-rasterbar -j "$JOBS" > "$B1/build.log" 2>&1 \
