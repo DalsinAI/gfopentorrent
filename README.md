@@ -37,6 +37,23 @@ platform block:
   call. The gateway isn't known, so NAT-PMP has no router to ask; UPnP
   finds its router by multicast.
 
+**One task.** A bsdsocket.library base belongs to the task that opened it,
+so GFOpenBoost builds Asio with its threads off, and every socket call has
+to come from one task. libtorrent does that when:
+
+- the session is made on the program's own `io_context`
+  (`lt::session(params, io)`), so it starts no network thread;
+- `params.disk_io_constructor = lt::posix_disk_io_constructor`, with
+  `hashing_threads` and `aio_threads` at 0, so disk work and hashing run on
+  that task too;
+- every call into the session is made from inside `io.run()` (a handler or
+  `post()`), because a call from outside waits for the loop to answer it;
+- GFOpenBoost has patch 0005 (#8), so `async_resolve` (tracker names) needs
+  no worker thread.
+
+The UI's loop is that `io_context`: GFOpenBoost's `exec_waiter` waits for
+the window's MsgPort in the same wait as the sockets.
+
 Asio comes from GFOpenBoost and waits through event.library, so the
 package puts `event.library` in `LIBS:`, as aMule's does. Without it every
 socket call fails with ENOSYS.
@@ -54,6 +71,10 @@ loopback, once over uTP and once over TCP. CI runs it on every pull request.
 Local service discovery needs a multicast group GFOpenSocket doesn't open to
 the guest (only mDNS's is), so it fails quietly there and DHT, trackers and
 PEX find peers.
+Then it builds libtorrent again with Asio's threads off (and the host's
+Boost given the same change as GFOpenBoost's patch 0005) and runs
+`tests/one_task_test.cpp`: the same transfers and a name lookup, all from
+one `io.run()`, while a timer checks the process never has a second thread.
 UDP on the Amiga itself is checked by GFOpenBoost's `UDPLT`.
 
 `tools/lab-probe/build-amiga.sh` builds `IfqProbe` on the stove: what
