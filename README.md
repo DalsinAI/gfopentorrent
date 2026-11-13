@@ -51,7 +51,9 @@ to come from one task. libtorrent does that when:
 - every call into the session is made from inside `io.run()` (a handler or
   `post()`), because a call from outside waits for the loop to answer it;
 - GFOpenBoost has patch 0005 (#8), so `async_resolve` (tracker names) needs
-  no worker thread.
+  no worker thread. A lookup then blocks the task, and the UI with it, for
+  as long as the stack's resolver takes; fine for trackers, but a name the
+  user types should be looked up with that in mind.
 
 The UI's loop is that `io_context`: GFOpenBoost's `exec_waiter` waits for
 the window's MsgPort in the same wait as the sockets.
