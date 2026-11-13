@@ -38,6 +38,14 @@ if grep -qi gnutls "$B/nm.txt"; then
     echo "FAIL libtorrent links GnuTLS"; exit 1
 fi
 echo "PASS no GnuTLS in libtorrent"
+# patch 0001 repeats struct gfot_iface for enum_net.cpp: it must stay
+# the same as compat/gfot_ifq.h's
+gfot_struct() { sed -n '/^+\{0,1\}struct gfot_iface/,/};/p' "$1" | sed 's/^+//; s/\/\*.*\*\///' | tr -d ' \t\n'; }
+a=$(gfot_struct "$HERE/compat/gfot_ifq.h"); b=$(gfot_struct "$HERE/patches/libtorrent/0001-amiga-platform.patch")
+if [ -z "$a" ] || [ "$a" != "$b" ]; then
+    echo "FAIL struct gfot_iface differs between compat/gfot_ifq.h and patch 0001"; exit 1
+fi
+echo "PASS struct gfot_iface the same in compat/gfot_ifq.h and patch 0001"
 for c in gfot_ifq_host gfot_ifq_common; do
     ${CC:-gcc} -std=gnu99 -O1 -Wall -c "$HERE/compat/$c.c" -o "$B/$c.o"
 done

@@ -18,3 +18,8 @@ int gfot_add_loopback(struct gfot_iface *out, int n, int max)
     out[n].up = 1;
     return n + 1;
 }
+
+int gfot_stack_has_ifq(unsigned version, unsigned neg_size)
+{
+    return version >= 4 && neg_size >= GFOT_IFQ_LAST_LVO;
+}
