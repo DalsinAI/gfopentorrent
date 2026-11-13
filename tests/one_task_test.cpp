@@ -68,12 +68,14 @@ static int threads_now()
 #endif
 }
 
-static lt::settings_pack pack(bool utp)
+static lt::settings_pack pack(bool utp, bool lsd = false)
 {
     lt::settings_pack p;
     p.set_str(lt::settings_pack::listen_interfaces, "127.0.0.1:0");
     p.set_bool(lt::settings_pack::enable_dht, false);
-    p.set_bool(lt::settings_pack::enable_lsd, false);
+    // LSD on: GFOpenSocket refuses its multicast group, and the transfer
+    // must still go
+    p.set_bool(lt::settings_pack::enable_lsd, lsd);
     p.set_bool(lt::settings_pack::enable_upnp, false);
     p.set_bool(lt::settings_pack::enable_natpmp, false);
     p.set_bool(lt::settings_pack::enable_outgoing_utp, utp);
@@ -88,9 +90,9 @@ static lt::settings_pack pack(bool utp)
     return p;
 }
 
-static void run_transfer(const std::string &dir, bool utp)
+static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
 {
-    const std::string kind = utp ? "uTP" : "TCP";
+    const std::string kind = std::string(utp ? "uTP" : "TCP") + (lsd ? "+LSD" : "");
     std::string seed = dir + "/s" + kind, leech = dir + "/l" + kind;
     mkdir(seed.c_str(), 0755);
     mkdir(leech.c_str(), 0755);
@@ -107,7 +109,7 @@ static void run_transfer(const std::string &dir, bool utp)
     auto ti = std::make_shared<lt::torrent_info>(buf, lt::from_span);
 
     asio::io_context io;
-    lt::session_params pa(pack(utp)), pb(pack(utp));
+    lt::session_params pa(pack(utp, lsd)), pb(pack(utp, lsd));
     pa.disk_io_constructor = lt::posix_disk_io_constructor;
     pb.disk_io_constructor = lt::posix_disk_io_constructor;
     lt::session a(std::move(pa), io);
@@ -205,6 +207,7 @@ int main()
     if (dir) {
         run_transfer(dir, true);
         run_transfer(dir, false);
+        run_transfer(dir, false, true);
     }
     lookup_on_one_task();
     std::printf("one_task_test: %d failed\n", failed);

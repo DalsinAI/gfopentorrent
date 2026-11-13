@@ -2,9 +2,12 @@
 # GFOpenTorrent: libtorrent for AmigaOS on the stove, and the lab tests.
 #   STOVE=.../stoves/os32-gcc16-open6 GFOPENBOOST_SDK=<sdk dir> OUT=out \
 #       JOBS=2 tools/stove/build-amiga.sh
-# GFOPENBOOST_SDK is an unpacked GFOpenBoost SDK with patch 0005 (#8):
-# v1.89.0-rc4 or later, or rc3 with tools/asio-check's libboost_asio.a
-# from #8 copied into its lib/. Builds, with no OpenSSL and no GnuTLS:
+# GFOPENBOOST_SDK is an unpacked GFOpenBoost SDK (left as it is: the build
+# uses a copy). Patch 0005 (gfopenboost #8, async_resolve on one task)
+# must be in it. When its headers lack it (rc3), the copy gets the patch,
+# pinned in torrent.lock, and GFOPENBOOST_ASIO_LIB must name a
+# libboost_asio.a built with it (#8's tools/asio-check), which replaces
+# the copy's. Builds, with no OpenSSL and no GnuTLS:
 #   OUT/libtorrent-rasterbar.a, OUT/libgfotcompat.a
 #   OUT/OneTask   tests/one_task_test.cpp: two sessions, uTP and TCP over
 #                 loopback, and a name lookup, on one task
@@ -26,8 +29,23 @@ OUT=$(CDPATH= cd -- "$OUT" && pwd)
 PATH="$TC/bin:$PATH"
 command -v cmake >/dev/null || { echo "no cmake on this stove"; exit 1; }
 [ -f "$SDK/lib/libboost_asio.a" ] || { echo "$SDK has no lib/libboost_asio.a"; exit 1; }
-grep -q 'BOOST_ASIO_DISABLE_THREADS' "$SDK/include/boost/asio/detail/impl/resolver_thread_pool.ipp" \
-    || { echo "$SDK lacks GFOpenBoost patch 0005 (async_resolve on one task)"; exit 1; }
+. "$HERE/torrent.lock"
+# the SDK copy, with patch 0005 when it lacks it
+SC="$WORK/gfopenboost-sdk"
+rm -rf "$SC"
+mkdir -p "$SC"
+cp -R "$SDK/." "$SC/"
+RTP=boost/asio/detail/impl/resolver_thread_pool.ipp
+if ! grep -q 'BOOST_ASIO_DISABLE_THREADS' "$SC/include/$RTP"; then
+    : "${GFOPENBOOST_ASIO_LIB:?$SDK lacks patch 0005: set GFOPENBOOST_ASIO_LIB to a libboost_asio.a built with it (gfopenboost #8, tools/asio-check)}"
+    P="$WORK/gfopenboost-0005.patch"
+    [ -f "$P" ] || curl -fsSL -o "$P" "$GFOPENBOOST_0005_URL"
+    echo "$GFOPENBOOST_0005_SHA256  $P" | sha256sum -c - >/dev/null || { echo "patch 0005: checksum differs"; exit 1; }
+    patch -s -d "$SC/include" -p1 --no-backup-if-mismatch < "$P"
+    cp "$GFOPENBOOST_ASIO_LIB" "$SC/lib/libboost_asio.a"
+    echo "SDK copy: patch 0005 applied, libboost_asio.a from $GFOPENBOOST_ASIO_LIB"
+fi
+SDK="$SC"
 
 WORK="$WORK/src" sh "$HERE/scripts/fetch-sources.sh" libtorrent
 LT="$WORK/src/libtorrent"
@@ -62,7 +80,6 @@ m68k-amigaos-g++ $CF -std=gnu++17 -DBOOST_ASIO_DISABLE_THREADS -DBOOST_ASIO_SEPA
 m68k-amigaos-gcc $CF -std=gnu99 -Wall -I"$HERE/compat" -o "$OUT/IfqProbe" \
     "$HERE/tests/ifqprobe.c" "$OUT/libgfotcompat.a" -lsocket
 
-. "$HERE/torrent.lock"
 E="$WORK/gfopenevent-$GFOPENEVENT_TAG.zip"
 [ -f "$E" ] || curl -fsSL -o "$E" "$GFOPENEVENT_URL"
 echo "$GFOPENEVENT_SHA256  $E" | sha256sum -c - >/dev/null || { echo "event.library archive checksum differs"; exit 1; }
