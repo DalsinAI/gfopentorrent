@@ -18,10 +18,16 @@ B="$WORK/../host-build"
 mkdir -p "$B"
 cmake -S "$LT" -B "$B" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
     -Dencryption=OFF -Ddeprecated-functions=OFF -DCMAKE_CXX_STANDARD=17 \
-    -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE \
+    -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=TRUE \
     -DCMAKE_CXX_FLAGS="-DTORRENT_AMIGA_HOST_TEST" > "$B/configure.log"
 cmake --build "$B" --target torrent-rasterbar -j "$JOBS" > "$B/build.log" 2>&1 \
     || { grep -E 'error' "$B/build.log" | head -40; exit 1; }
+# licence check: without OpenSSL, libtorrent's CMake looks for GnuTLS (LGPL),
+# which must never come in
+if nm -A "$B/libtorrent-rasterbar.a" 2>/dev/null | grep -qi gnutls; then
+    echo "FAIL libtorrent links GnuTLS"; exit 1
+fi
+echo "PASS no GnuTLS in libtorrent"
 for c in gfot_ifq_host gfot_ifq_common; do
     ${CC:-gcc} -std=gnu99 -O1 -Wall -c "$HERE/compat/$c.c" -o "$B/$c.o"
 done
@@ -59,7 +65,7 @@ B1="$WORK/../host-1task"
 mkdir -p "$B1"
 cmake -S "$LT" -B "$B1" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
     -Dencryption=OFF -Ddeprecated-functions=OFF -DCMAKE_CXX_STANDARD=17 \
-    -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE \
+    -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=TRUE \
     -DCMAKE_CXX_FLAGS="-I$OV -DTORRENT_AMIGA_HOST_TEST -DBOOST_ASIO_DISABLE_THREADS" > "$B1/configure.log"
 cmake --build "$B1" --target torrent-rasterbar -j "$JOBS" > "$B1/build.log" 2>&1 \
     || { grep -E 'error' "$B1/build.log" | head -40; exit 1; }
