@@ -1,0 +1,173 @@
+diff --git a/include/libtorrent/config.hpp b/include/libtorrent/config.hpp
+index 3d0fb5d..7322038 100644
+--- a/include/libtorrent/config.hpp
++++ b/include/libtorrent/config.hpp
+@@ -107,13 +107,28 @@ POSSIBILITY OF SUCH DAMAGE.
+ 
+ // set up defines for target environments
+ // ==== AMIGA ===
+-#if defined __AMIGA__ || defined __amigaos__ || defined __AROS__
++// GFOpenTorrent: the AmigaOS 3 build (68040, GFOpenSocket's bsdsocket.library
++// through GFOpenBoost's Asio). TORRENT_AMIGA_HOST_TEST picks this block on a
++// Linux host, so the Amiga paths are tested there (gfopentorrent tests/).
++#if defined __AMIGA__ || defined __amigaos__ || defined __AROS__ \
++	|| defined TORRENT_AMIGA_HOST_TEST
+ #define TORRENT_AMIGA
+-#define TORRENT_USE_IOSTREAM 0
+-// set this to 1 to disable all floating point operations
+-// (disables some float-dependent APIs)
+-#define TORRENT_NO_FPU 1
+ #define TORRENT_USE_I2P 0
++// no mmap(): posix_disk_io does the disk work
++#define TORRENT_HAVE_MMAP 0
++#define TORRENT_HAS_SYMLINK 0
++#define TORRENT_HAS_FALLOCATE 0
++// interfaces from gfot_interfaces() (Roadshow's ObtainInterfaceList() and
++// QueryInterfaceTagList(); GFOpenSocket answers SIOCGIFCONF with
++// EOPNOTSUPP); routes from them and a connected UDP socket (enum_net.cpp),
++// since bsdsocket.library has no route table call
++#define TORRENT_USE_AMIGA_IFQ 1
++#define TORRENT_USE_UDP_ROUTE 1
++#ifdef TORRENT_AMIGA_HOST_TEST
++#define TORRENT_HAS_SALEN 0
++#else
++#define TORRENT_HAS_SALEN 1
++#endif
+ 
+ // ==== Darwin/BSD ===
+ #elif (defined __APPLE__ && defined __MACH__) || defined __FreeBSD__ || defined __NetBSD__ \
+@@ -553,6 +568,14 @@ POSSIBILITY OF SUCH DAMAGE.
+ #define TORRENT_HAS_SYMLINK 0
+ #endif
+ 
++#ifndef TORRENT_USE_UDP_ROUTE
++#define TORRENT_USE_UDP_ROUTE 0
++#endif
++
++#ifndef TORRENT_USE_AMIGA_IFQ
++#define TORRENT_USE_AMIGA_IFQ 0
++#endif
++
+ #ifndef TORRENT_USE_IFCONF
+ #define TORRENT_USE_IFCONF 0
+ #endif
+diff --git a/src/enum_net.cpp b/src/enum_net.cpp
+index a7c3ba7..729e698 100644
+--- a/src/enum_net.cpp
++++ b/src/enum_net.cpp
+@@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
+ #include <cstdlib> // for wcstombscstombs
+ #include <cerrno>
+ #include <vector>
++#include <algorithm>
+ 
+ #include "libtorrent/aux_/disable_warnings_push.hpp"
+ 
+@@ -157,6 +158,22 @@ const unsigned long siocgifmtu = SIOCGIFMTU;
+ #define IF_NAMESIZE IFNAMSIZ
+ #endif
+ 
++#if TORRENT_USE_AMIGA_IFQ
++#include <cstring>
++// gfopentorrent compat/: the stack's IPv4 interfaces, loopback included.
++// Returns how many it filled in, or -1 with errno set.
++extern "C" {
++struct gfot_iface
++{
++	char name[16];
++	unsigned char addr[4];
++	unsigned char mask[4];
++	int up;
++};
++int gfot_interfaces(struct gfot_iface* out, int max);
++}
++#endif
++
+ namespace libtorrent {
+ 
+ namespace {
+@@ -667,6 +684,29 @@ int _System __libsocket_sysctl(int* mib, u_int namelen, void *oldp, size_t *oldl
+ 			std::strcpy(wan.description, "Simulator Ethernet Adapter");
+ 			ret.push_back(wan);
+ 		}
++#elif TORRENT_USE_AMIGA_IFQ
++		TORRENT_UNUSED(ios);
++		gfot_iface rows[16];
++		int const n = gfot_interfaces(rows, 16);
++		if (n < 0)
++		{
++			ec = error_code(errno, system_category());
++			return ret;
++		}
++		for (int k = 0; k < n; ++k)
++		{
++			ip_interface iface;
++			address_v4::bytes_type a, m;
++			std::memcpy(a.data(), rows[k].addr, 4);
++			std::memcpy(m.data(), rows[k].mask, 4);
++			iface.interface_address = address_v4(a);
++			iface.netmask = address_v4(m);
++			std::strncpy(iface.name, rows[k].name, sizeof(iface.name) - 1);
++			iface.name[sizeof(iface.name) - 1] = '\0';
++			iface.flags = rows[k].up ? if_flags::up : interface_flags{};
++			if (iface.interface_address.is_loopback()) iface.flags |= if_flags::loopback;
++			ret.push_back(iface);
++		}
+ #elif TORRENT_USE_NETLINK
+ 		int const sock = ::socket(PF_ROUTE, SOCK_DGRAM | flags, NETLINK_ROUTE);
+ 		if (sock < 0)
+@@ -1072,6 +1112,54 @@ int _System __libsocket_sysctl(int* mib, u_int namelen, void *oldp, size_t *oldl
+ 			ret.push_back(r);
+ 		}
+ 
++#elif TORRENT_USE_UDP_ROUTE
++		// No route table call: a route to each interface's own subnet, and a
++		// default route on the interface a connected UDP socket picks for a
++		// global address (connect() sends nothing). The gateway isn't known,
++		// so NAT-PMP has no router to ask; UPnP finds its own by multicast.
++		std::vector<ip_interface> const ifs = enum_net_interfaces(ios, ec);
++		if (ec) return ret;
++		for (auto const& i : ifs)
++		{
++			if (!i.interface_address.is_v4()) continue;
++			if (!(i.flags & if_flags::up)) continue;
++			ip_route r;
++			address_v4::bytes_type a = i.interface_address.to_v4().to_bytes();
++			address_v4::bytes_type const m = i.netmask.to_v4().to_bytes();
++			for (std::size_t k = 0; k < a.size(); ++k) a[k] &= m[k];
++			r.destination = address_v4(a);
++			r.netmask = i.netmask;
++			r.gateway = address_v4();
++			r.source_hint = i.interface_address;
++			std::strncpy(r.name, i.name, sizeof(r.name) - 1);
++			r.mtu = 1500;
++			ret.push_back(r);
++		}
++		{
++			error_code uec;
++			udp::socket s(ios);
++			s.open(udp::v4(), uec);
++			// 8.8.8.8 stands for any global address: no packet is sent
++			if (!uec) s.connect(udp::endpoint(make_address_v4("8.8.8.8"), 53), uec);
++			udp::endpoint const local = uec ? udp::endpoint() : s.local_endpoint(uec);
++			if (!uec && !local.address().is_unspecified())
++			{
++				auto const it = std::find_if(ifs.begin(), ifs.end()
++					, [&](ip_interface const& i) { return i.interface_address == local.address(); });
++				if (it != ifs.end())
++				{
++					ip_route r;
++					r.destination = address_v4();
++					r.netmask = address_v4();
++					r.gateway = address_v4();
++					r.source_hint = local.address();
++					std::strncpy(r.name, it->name, sizeof(r.name) - 1);
++					r.mtu = 1500;
++					ret.push_back(r);
++				}
++			}
++		}
++
+ #elif TORRENT_USE_SYSCTL
+ /*
+ 		struct rt_msg

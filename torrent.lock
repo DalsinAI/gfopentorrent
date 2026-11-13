@@ -1,0 +1,16 @@
+# GFOpenTorrent: the third-party sources, pinned. scripts/fetch-sources.sh
+# fetches each at its commit and checks it. Not kept in this repository.
+#
+# libtorrent-rasterbar, BSD-3-Clause. The 2.0 series, which PicoTorrent
+# builds on: it has no WebTorrent (that is 2.1, with libdatachannel under
+# MPL-2.0), so nothing copyleft comes in. HTTPS trackers go through the
+# gfopentls shim, never GnuTLS (LGPL).
+LIBTORRENT_URL=https://github.com/arvidn/libtorrent
+LIBTORRENT_TAG=v2.0.15
+LIBTORRENT_COMMIT=1eb18faeae156d8dbbab42935c082f8b81f50989
+# libtorrent's deps/try_signal submodule, BSD-3-Clause (Arvid Norberg)
+TRY_SIGNAL_COMMIT=105cce59972f925a33aa6b1c3109e4cd3caf583d
+# PicoTorrent, MIT: the UI, through gfopenwxtoolkit onto GFOpenLayout
+PICOTORRENT_URL=https://github.com/picotorrent/picotorrent
+PICOTORRENT_TAG=v0.25.0
+PICOTORRENT_COMMIT=c2ad8e2d69773293e116ac08e228d21d98a55892

@@ -1,0 +1,22 @@
+# GFOpenTorrent host tests: libtorrent with our patches, built in its Amiga
+# configuration on a Linux host (tests/run-host-tests.sh). The Amiga build
+# itself runs on the Team's stove, not here.
+# Copyright (c) 2026 AmiCradle Team. MIT licence.
+name: Host tests
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update -q && sudo apt-get install -y -q cmake g++ libboost-dev
+      - name: Build libtorrent (Amiga config) and run the tests
+        run: JOBS=4 WORK="$RUNNER_TEMP/gfot" sh tests/run-host-tests.sh
