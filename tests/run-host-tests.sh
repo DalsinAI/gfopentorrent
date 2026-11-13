@@ -28,3 +28,7 @@ ${CXX:-g++} -std=c++17 -O1 -DTORRENT_AMIGA_HOST_TEST -DTORRENT_ABI_VERSION=100 \
     "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o" \
     -pthread -o "$B/amiga_host_test"
 "$B/amiga_host_test"
+# the lab probe, against the host's interfaces
+${CC:-gcc} -std=gnu99 -O1 -Wall -I"$HERE/compat" -o "$B/ifqprobe" "$HERE/tests/ifqprobe.c" \
+    "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o"
+"$B/ifqprobe"

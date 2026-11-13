@@ -55,3 +55,8 @@ Local service discovery needs a multicast group GFOpenSocket doesn't open to
 the guest (only mDNS's is), so it fails quietly there and DHT, trackers and
 PEX find peers.
 UDP on the Amiga itself is checked by GFOpenBoost's `UDPLT`.
+
+`tools/lab-probe/build-amiga.sh` builds `IfqProbe` on the stove: what
+`compat/gfot_ifq_amiga.c` gets from the stack, for a lab run (it needs
+bsdsocket.library 4). The host tests run the same probe on the host's
+interfaces.
