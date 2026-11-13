@@ -165,19 +165,27 @@ static void transfer(const std::string &dir, bool utp)
     pb.ti = ti;
     pb.save_path = leech;
     lt::torrent_handle hb = b.add_torrent(pb);
-    hb.connect_peer(lt::tcp::endpoint(lt::make_address("127.0.0.1"), std::uint16_t(port)));
+    lt::tcp::endpoint const seed_ep(lt::make_address("127.0.0.1"), std::uint16_t(port));
 
-    auto t0 = std::chrono::steady_clock::now();
+    // Connect once the seed has checked its file (a peer that arrives while
+    // it checks is turned away, and libtorrent waits a minute before trying
+    // that peer again), and again each second while the leech has no peer.
+    auto t0 = std::chrono::steady_clock::now(), last = t0 - std::chrono::seconds(2);
     bool done = false;
     while (std::chrono::steady_clock::now() - t0 < std::chrono::seconds(60)) {
-        if (hb.status().is_seeding) { done = true; break; }
-        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        lt::torrent_status st = hb.status();
+        if (st.is_seeding) { done = true; break; }
+        auto now = std::chrono::steady_clock::now();
+        if (ha.status().is_seeding && st.num_peers == 0 && now - last >= std::chrono::seconds(1)) {
+            hb.connect_peer(seed_ep);
+            last = now;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
     long ms = long(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count());
     lt::torrent_status st = hb.status();
     check((std::string(kind) + ": 300 KB over loopback, hashes checked").c_str(), done && st.num_pieces == ti->num_pieces(),
           std::to_string(st.num_pieces) + "/" + std::to_string(ti->num_pieces()) + " pieces, " + std::to_string(ms) + " ms");
-    (void)ha;
 }
 
 int main()
