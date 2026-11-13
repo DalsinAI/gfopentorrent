@@ -34,7 +34,8 @@ int gfot_interfaces(struct gfot_iface *out, int max)
     struct Node *node;
     int n = 0;
 
-    if (!ss || ss->lx_network_type != 1 || !ss->lx_BsdSocketBase || ss->lx_BsdSocketBase->lib_Version < 4) {
+    if (!ss || ss->lx_network_type != 1 || !ss->lx_BsdSocketBase
+        || !gfot_stack_has_ifq(ss->lx_BsdSocketBase->lib_Version, ss->lx_BsdSocketBase->lib_NegSize)) {
         errno = ENOSYS;
         return -1;
     }

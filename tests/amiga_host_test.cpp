@@ -68,6 +68,11 @@ static void loopback_checks()
           && rows[1].addr[0] == 127 && rows[1].addr[3] == 1 && rows[1].mask[0] == 255 && rows[1].mask[1] == 0);
     check("lo0 not added twice", gfot_add_loopback(rows, 2, 3) == 2);
     check("no room, nothing added", gfot_add_loopback(rows, 1, 1) == 1);
+    // the guard before ObtainInterfaceList: version 4 and a jump table
+    // that reaches QueryInterfaceTagList (-444)
+    check("Roadshow-style stack has the interface calls", gfot_stack_has_ifq(4, 444) == 1 && gfot_stack_has_ifq(4, 600) == 1);
+    check("version 4 table too short (AmiTCP 4.x): not called", gfot_stack_has_ifq(4, 438) == 0);
+    check("version 3 stack: not called", gfot_stack_has_ifq(3, 600) == 0);
 }
 
 static void net_checks()

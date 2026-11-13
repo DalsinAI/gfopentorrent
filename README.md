@@ -31,7 +31,9 @@ platform block:
 - interfaces from `compat/gfot_ifq_amiga.c`, through Roadshow's
   `ObtainInterfaceList()` and `QueryInterfaceTagList()` (GFOpenSocket answers
   `SIOCGIFCONF` with EOPNOTSUPP), with `lo0` added when the stack doesn't
-  list a loopback;
+  list a loopback. Those calls are made only on a version 4 stack whose jump
+  table reaches `QueryInterfaceTagList()` (-444); AmiTCP 4.x is version 4
+  without them, and gets ENOSYS;
 - routes from the interfaces plus a connected UDP socket
   (`TORRENT_USE_UDP_ROUTE`), because bsdsocket.library has no route table
   call. The gateway isn't known, so NAT-PMP has no router to ask; UPnP
@@ -53,6 +55,11 @@ to come from one task. libtorrent does that when:
 
 The UI's loop is that `io_context`: GFOpenBoost's `exec_waiter` waits for
 the window's MsgPort in the same wait as the sockets.
+
+**No peer encryption yet.** libtorrent is built with `-Dencryption=OFF`
+(no OpenSSL, no GnuTLS), which also turns off protocol encryption (PE/MSE).
+Peers that insist on it won't connect. PE needs only RC4 and a
+Diffie-Hellman exchange, which can come from GFOpenTLS later.
 
 Asio comes from GFOpenBoost and waits through event.library, so the
 package puts `event.library` in `LIBS:`, as aMule's does. Without it every
