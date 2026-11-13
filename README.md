@@ -56,6 +56,10 @@ to come from one task. libtorrent does that when:
 The UI's loop is that `io_context`: GFOpenBoost's `exec_waiter` waits for
 the window's MsgPort in the same wait as the sockets.
 
+**Files up to 2 GiB.** libnix's `off_t` and `fseek()` are 32 bits, as
+dos.library's `Seek()` is, so patch 0002 drops libtorrent's 64-bit asserts
+and a seek or size past 2 GiB fails with EFBIG.
+
 **No peer encryption yet.** libtorrent is built with `-Dencryption=OFF`
 (no OpenSSL, no GnuTLS), which also turns off protocol encryption (PE/MSE).
 Peers that insist on it won't connect. PE needs only RC4 and a

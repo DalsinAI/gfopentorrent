@@ -58,8 +58,12 @@ cmake -G "Unix Makefiles" -S "$LT" -B "$B" -DCMAKE_TOOLCHAIN_FILE="$HERE/cmake/t
     -DCMAKE_DISABLE_FIND_PACKAGE_OpenSSL=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_GnuTLS=TRUE \
     > "$B.configure.log" 2>&1 || { tail -40 "$B.configure.log"; exit 1; }
 cmake --build "$B" --target torrent-rasterbar -j "$JOBS" > "$B.build.log" 2>&1 \
-    || { grep -E 'error' "$B.build.log" | sort -u | head -60; exit 1; }
-if m68k-amigaos-nm -A "$B/libtorrent-rasterbar.a" 2>/dev/null | grep -qi gnutls; then
+    || { grep -m5 ' error:' "$B.build.log"; exit 1; }
+# nm's own failure must not pass as "no GnuTLS"
+m68k-amigaos-nm -A "$B/libtorrent-rasterbar.a" > "$B.nm.txt" 2>"$B.nm.err" \
+    || { echo "nm could not read libtorrent: $(head -1 "$B.nm.err")"; exit 1; }
+[ -s "$B.nm.txt" ] || { echo "nm listed no symbols"; exit 1; }
+if grep -qi gnutls "$B.nm.txt"; then
     echo "libtorrent links GnuTLS"; exit 1
 fi
 cp "$B/libtorrent-rasterbar.a" "$OUT/"

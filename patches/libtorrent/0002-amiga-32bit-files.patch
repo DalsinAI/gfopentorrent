@@ -1,0 +1,74 @@
+diff --git a/include/libtorrent/aux_/file_pointer.hpp b/include/libtorrent/aux_/file_pointer.hpp
+index b7c181c..c8aa181 100644
+--- a/include/libtorrent/aux_/file_pointer.hpp
++++ b/include/libtorrent/aux_/file_pointer.hpp
+@@ -36,6 +36,8 @@ POSSIBILITY OF SUCH DAMAGE.
+ #include <cstdio>
+ #include <utility> // for swap
+ #include <cstdint>
++#include <cerrno>
++#include <limits>
+ 
+ #include "libtorrent/config.hpp"
+ 
+@@ -64,6 +66,16 @@ inline int portable_fseeko(FILE* const f, std::int64_t const offset, int const w
+ {
+ #ifdef TORRENT_WINDOWS
+ 	return ::_fseeki64(f, offset, whence);
++#elif defined TORRENT_AMIGA
++	// libnix's fseek() takes a 32-bit long, as dos.library's Seek() does:
++	// an offset it can't hold is EFBIG, not a seek to the wrong place
++	if (offset > std::int64_t(std::numeric_limits<std::int32_t>::max())
++		|| offset < std::int64_t(std::numeric_limits<std::int32_t>::min()))
++	{
++		errno = EFBIG;
++		return -1;
++	}
++	return ::fseek(f, static_cast<long>(offset), whence);
+ #elif TORRENT_HAS_FSEEKO
+ 	return ::fseeko(f, offset, whence);
+ #else
+diff --git a/src/file.cpp b/src/file.cpp
+index 528380a..6e30643 100644
+--- a/src/file.cpp
++++ b/src/file.cpp
+@@ -98,6 +98,7 @@ POSSIBILITY OF SUCH DAMAGE.
+ #include <unistd.h>
+ #include <sys/types.h>
+ #include <cerrno>
++#include <limits>
+ #include <dirent.h>
+ 
+ #include <boost/asio/error.hpp> // for boost::asio::error::eof
+@@ -535,7 +536,16 @@ file_handle::file_handle(string_view name, std::int64_t const size
+ 		}
+ #endif
+ 
++#if defined TORRENT_AMIGA
++		// libnix's off_t is 32 bits: a size it can't hold is EFBIG
++		if (size > std::int64_t(std::numeric_limits<off_t>::max()))
++		{
++			::close(m_fd);
++			throw_ex<storage_error>(error_code(EFBIG, system_category()), operation_t::file_truncate);
++		}
++#else
+ 		static_assert(sizeof(off_t) >= sizeof(size), "There seems to be a large-file issue in truncate()");
++#endif
+ 		if (ftruncate(m_fd, static_cast<off_t>(size)) < 0)
+ 		{
+ 			int const err = errno;
+diff --git a/src/posix_storage.cpp b/src/posix_storage.cpp
+index 561e825..b86d60e 100644
+--- a/src/posix_storage.cpp
++++ b/src/posix_storage.cpp
+@@ -45,7 +45,9 @@ POSSIBILITY OF SUCH DAMAGE.
+ 
+ using namespace libtorrent::flags; // for flag operators
+ 
+-#ifndef TORRENT_WINDOWS
++// AmigaOS: libnix's off_t and fseek() are 32 bits, as dos.library's Seek()
++// is; portable_fseeko() refuses an offset past 2 GiB with EFBIG instead
++#if !defined TORRENT_WINDOWS && !defined TORRENT_AMIGA
+ // make sure the _FILE_OFFSET_BITS define worked
+ // on this platform. It's supposed to make file
+ // related functions support 64-bit offsets.

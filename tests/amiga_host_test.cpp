@@ -17,6 +17,8 @@
 #include <libtorrent/add_torrent_params.hpp>
 #include <libtorrent/alert_types.hpp>
 #include "gfot_ifq.h"
+#include <libtorrent/aux_/file_pointer.hpp>
+#include <cerrno>
 #include <libtorrent/torrent_status.hpp>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
@@ -193,9 +195,24 @@ static void transfer(const std::string &dir, bool utp)
           std::to_string(st.num_pieces) + "/" + std::to_string(ti->num_pieces()) + " pieces, " + std::to_string(ms) + " ms");
 }
 
+// patch 0002: libnix's fseek() takes a 32-bit long, so an offset past
+// 2 GiB must fail with EFBIG, not seek somewhere else
+static void seek_checks()
+{
+    FILE *f = std::tmpfile();
+    if (!f) { check("tmpfile for the seek checks", false); return; }
+    errno = 0;
+    int r = lt::aux::portable_fseeko(f, std::int64_t(3) << 30, SEEK_SET);
+    check("seek past 2 GiB refused with EFBIG", r == -1 && errno == EFBIG, std::to_string(r) + " errno " + std::to_string(errno));
+    r = lt::aux::portable_fseeko(f, 1000, SEEK_SET);
+    check("seek within 2 GiB", r == 0 && std::ftell(f) == 1000, std::to_string(r));
+    std::fclose(f);
+}
+
 int main()
 {
     config_checks();
+    seek_checks();
     loopback_checks();
     net_checks();
     char tmpl[] = "/tmp/gfot-XXXXXX";
