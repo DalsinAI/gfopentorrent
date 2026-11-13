@@ -50,6 +50,10 @@ to come from one task. libtorrent does that when:
   that task too;
 - every call into the session is made from inside `io.run()` (a handler or
   `post()`), because a call from outside waits for the loop to answer it;
+- at the end, `auto proxy = ses.abort();`, destroy the session, and run
+  the loop until it returns before the proxy and the `io_context` go: the
+  shutdown runs in the loop, and an `io_context` destroyed with it still
+  queued frees the session's sockets out of order;
 - GFOpenBoost has patch 0005 (#8), so `async_resolve` (tracker names) needs
   no worker thread. A lookup then blocks the task, and the UI with it, for
   as long as the stack's resolver takes; fine for trackers, but a name the

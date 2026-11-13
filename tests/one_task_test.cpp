@@ -112,8 +112,8 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
     lt::session_params pa(pack(utp, lsd)), pb(pack(utp, lsd));
     pa.disk_io_constructor = lt::posix_disk_io_constructor;
     pb.disk_io_constructor = lt::posix_disk_io_constructor;
-    lt::session a(std::move(pa), io);
-    lt::session b(std::move(pb), io);
+    auto a = std::make_unique<lt::session>(std::move(pa), io);
+    auto b = std::make_unique<lt::session>(std::move(pb), io);
 
     int max_threads = threads_now(), port = 0, pieces = 0;
     bool done = false, timeout = false;
@@ -126,7 +126,7 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
         max_threads = std::max(max_threads, threads_now());
         std::vector<lt::alert *> as;
         if (!port) {
-            a.pop_alerts(&as);
+            a->pop_alerts(&as);
             for (auto *al : as)
                 if (auto *l = lt::alert_cast<lt::listen_succeeded_alert>(al))
                     if ((l->socket_type == lt::socket_type_t::utp) == utp) port = l->port;
@@ -134,15 +134,15 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
                 lt::add_torrent_params p;
                 p.ti = ti;
                 p.save_path = seed;
-                ha = a.add_torrent(p);
+                ha = a->add_torrent(p);
                 lt::add_torrent_params q;
                 q.ti = ti;
                 q.save_path = leech;
-                hb = b.add_torrent(q);
+                hb = b->add_torrent(q);
             }
         } else {
-            a.pop_alerts(&as);
-            b.pop_alerts(&as);
+            a->pop_alerts(&as);
+            b->pop_alerts(&as);
             lt::torrent_status st = hb.status();
             pieces = st.num_pieces;
             if (st.is_seeding) done = true;
@@ -168,8 +168,21 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
           std::to_string(pieces) + "/" + std::to_string(ti->num_pieces()) + " pieces, " + std::to_string(ms) + " ms"
           + (timeout ? ", timeout" : ""));
     check((kind + ": never a second thread").c_str(), max_threads == 1, "max " + std::to_string(max_threads));
-    // the sessions' destructors need the io_context to finish their work
+    // A session's shutdown runs in the io_context. Take a session_proxy
+    // (abort()), which keeps the session alive, run the loop until the
+    // shutdown is done, and only then let the proxies and the io_context go.
+    // (The test used to destroy the io_context with the shutdown still
+    // queued, which freed the sessions' sockets after their services:
+    // malloc_consolidate() aborted now and then.) The UI has to end the
+    // same way.
+    lt::session_proxy proxy_a = a->abort(), proxy_b = b->abort();
+    a.reset();
+    b.reset();
     io.restart();
+    auto t1 = std::chrono::steady_clock::now();
+    io.run();
+    long down = long(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t1).count());
+    check((kind + ": sessions shut down inside io.run()").c_str(), io.stopped() && down < 10000, std::to_string(down) + " ms");
 }
 
 // Names: libtorrent looks up trackers and web seeds with Asio's
