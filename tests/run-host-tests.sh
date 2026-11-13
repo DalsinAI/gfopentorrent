@@ -4,7 +4,7 @@
 # tests/amiga_host_test.cpp run against it. Then libtorrent again with
 # Asio's threads off, as GFOpenBoost builds it for the Amiga, and
 # tests/one_task_test.cpp. OpenSSL is kept out, as on the Amiga. Needs
-# cmake, g++ and Boost 1.83's headers.
+# cmake, g++ and Boost headers (1.83 or later).
 #   WORK=dir JOBS=n tests/run-host-tests.sh
 # Copyright (c) 2026 AmiCradle Team. MIT licence.
 set -eu
@@ -24,7 +24,11 @@ cmake --build "$B" --target torrent-rasterbar -j "$JOBS" > "$B/build.log" 2>&1 \
     || { grep -E 'error' "$B/build.log" | head -40; exit 1; }
 # licence check: without OpenSSL, libtorrent's CMake looks for GnuTLS (LGPL),
 # which must never come in
-if nm -A "$B/libtorrent-rasterbar.a" 2>/dev/null | grep -qi gnutls; then
+# nm's own failure must not pass as "no GnuTLS"
+nm -A "$B/libtorrent-rasterbar.a" > "$B/nm.txt" 2>"$B/nm.err" \
+    || { echo "FAIL nm could not read libtorrent: $(head -1 "$B/nm.err")"; exit 1; }
+[ -s "$B/nm.txt" ] || { echo "FAIL nm listed no symbols"; exit 1; }
+if grep -qi gnutls "$B/nm.txt"; then
     echo "FAIL libtorrent links GnuTLS"; exit 1
 fi
 echo "PASS no GnuTLS in libtorrent"
@@ -44,12 +48,19 @@ ${CC:-gcc} -std=gnu99 -O1 -Wall -I"$HERE/compat" -o "$B/ifqprobe" "$HERE/tests/i
 # ---- one task: Asio's threads off, and the host's Boost given GFOpenBoost's
 # patch 0005 (async_resolve without a worker thread) in an overlay
 OV="$WORK/../boost-overlay"
-F=boost/asio/detail/impl/resolver_service_base.ipp
 SYS=${BOOST_INCLUDE:-/usr/include}
+# Boost 1.83 has the op in resolver_service_base.ipp, 1.87 and later in
+# resolver_thread_pool.ipp (as GFOpenBoost's 1.89); "this" serves as an
+# owner other than scheduler_ in both
+F=""
+for f in boost/asio/detail/impl/resolver_thread_pool.ipp boost/asio/detail/impl/resolver_service_base.ipp; do
+    if grep -q '::start_resolve_op(resolve_op\* op)$' "$SYS/$f" 2>/dev/null; then F=$f; break; fi
+done
+[ -n "$F" ] || { echo "no start_resolve_op in the host's Boost under $SYS"; exit 1; }
 mkdir -p "$OV/$(dirname "$F")"
 awk '
   { print }
-  /^void resolver_service_base::start_resolve_op\(resolve_op\* op\)$/ { want = 1; next }
+  /::start_resolve_op\(resolve_op\* op\)$/ { want = 1; next }
   want && /^\{$/ {
     print "#if defined(BOOST_ASIO_DISABLE_THREADS)"
     print "  // host stand-in for GFOpenBoost patches/headers/0005"
@@ -60,7 +71,8 @@ awk '
     want = 0; done = 1
   }
   END { if (!done) exit 1 }
-' "$SYS/$F" > "$OV/$F" || { echo "the host's $F has no start_resolve_op to patch (Boost 1.83 expected)"; exit 1; }
+' "$SYS/$F" > "$OV/$F" || { echo "could not patch the host's $F"; exit 1; }
+echo "overlay: $F (Boost $(sed -n 's/^#define BOOST_LIB_VERSION "\(.*\)"/\1/p' "$SYS/boost/version.hpp"))"
 B1="$WORK/../host-1task"
 mkdir -p "$B1"
 cmake -S "$LT" -B "$B1" -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
