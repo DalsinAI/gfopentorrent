@@ -1,6 +1,7 @@
 // GFOpenTorrent host test: libtorrent built with TORRENT_AMIGA_HOST_TEST,
 // which picks libtorrent's Amiga platform block on a Linux host. Checks the
-// Amiga paths: interfaces from SIOCGIFCONF, routes from the UDP fallback
+// Amiga paths: interfaces from gfot_interfaces() (Roadshow's interface
+// calls on the Amiga, getifaddrs() here), routes from the UDP fallback
 // (TORRENT_USE_UDP_ROUTE), and a whole transfer over loopback between two
 // sessions with posix_disk_io (no mmap on the Amiga), once over uTP only and
 // once over TCP only. One line a check, "amiga_host_test: N failed" at the
@@ -15,11 +16,13 @@
 #include <libtorrent/torrent_info.hpp>
 #include <libtorrent/add_torrent_params.hpp>
 #include <libtorrent/alert_types.hpp>
+#include "gfot_ifq.h"
 #include <libtorrent/torrent_status.hpp>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <string>
 #include <thread>
@@ -45,9 +48,26 @@ static void config_checks()
 {
     check("TORRENT_AMIGA block picked", true);
     check("no mmap (posix_disk_io)", TORRENT_HAVE_MMAP == 0);
-    check("interfaces through SIOCGIFCONF", TORRENT_USE_IFCONF == 1 && TORRENT_USE_NETLINK == 0 && TORRENT_USE_IFADDRS == 0);
+    check("interfaces through gfot_interfaces()", TORRENT_USE_AMIGA_IFQ == 1 && TORRENT_USE_IFCONF == 0
+          && TORRENT_USE_NETLINK == 0 && TORRENT_USE_IFADDRS == 0);
     check("routes through the UDP fallback", TORRENT_USE_UDP_ROUTE == 1 && TORRENT_USE_SYSCTL == 0);
     check("no I2P", TORRENT_USE_I2P == 0);
+}
+
+// GFOpenSocket lists one interface and no loopback: gfot_add_loopback()
+// adds lo0 then, and only then
+static void loopback_checks()
+{
+    gfot_iface rows[3] = {};
+    std::strcpy(rows[0].name, "gfopensocket0");
+    rows[0].addr[0] = 192; rows[0].addr[1] = 168; rows[0].addr[3] = 195;
+    rows[0].mask[0] = rows[0].mask[1] = rows[0].mask[2] = 255;
+    rows[0].up = 1;
+    int n = gfot_add_loopback(rows, 1, 3);
+    check("lo0 added after the stack's one interface", n == 2 && std::string(rows[1].name) == "lo0"
+          && rows[1].addr[0] == 127 && rows[1].addr[3] == 1 && rows[1].mask[0] == 255 && rows[1].mask[1] == 0);
+    check("lo0 not added twice", gfot_add_loopback(rows, 2, 3) == 2);
+    check("no room, nothing added", gfot_add_loopback(rows, 1, 1) == 1);
 }
 
 static void net_checks()
@@ -163,6 +183,7 @@ static void transfer(const std::string &dir, bool utp)
 int main()
 {
     config_checks();
+    loopback_checks();
     net_checks();
     char tmpl[] = "/tmp/gfot-XXXXXX";
     const char *dir = mkdtemp(tmpl);

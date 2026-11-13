@@ -28,7 +28,10 @@ The BSD-3 notices go in the About box and the docs.
 platform block:
 
 - no mmap, so `posix_disk_io` does the disk work;
-- interfaces from `SIOCGIFCONF`, stepping 4.4BSD's variable-length entries;
+- interfaces from `compat/gfot_ifq_amiga.c`, through Roadshow's
+  `ObtainInterfaceList()` and `QueryInterfaceTagList()` (GFOpenSocket answers
+  `SIOCGIFCONF` with EOPNOTSUPP), with `lo0` added when the stack doesn't
+  list a loopback;
 - routes from the interfaces plus a connected UDP socket
   (`TORRENT_USE_UDP_ROUTE`), because bsdsocket.library has no route table
   call. The gateway isn't known, so NAT-PMP has no router to ask; UPnP
@@ -43,8 +46,12 @@ socket call fails with ENOSYS.
     JOBS=4 tests/run-host-tests.sh
 
 builds the patched libtorrent on a Linux host with `TORRENT_AMIGA_HOST_TEST`,
-which picks the Amiga platform block there, and runs
+which picks the Amiga platform block there (with `compat/gfot_ifq_host.c`,
+getifaddrs() in place of Roadshow's calls), and runs
 `tests/amiga_host_test.cpp`: the platform switches, interfaces and routes
 through the Amiga paths, and a 300 KB transfer between two sessions over
 loopback, once over uTP and once over TCP. CI runs it on every pull request.
+Local service discovery needs a multicast group GFOpenSocket doesn't open to
+the guest (only mDNS's is), so it fails quietly there and DHT, trackers and
+PEX find peers.
 UDP on the Amiga itself is checked by GFOpenBoost's `UDPLT`.

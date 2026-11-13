@@ -1,8 +1,8 @@
 diff --git a/include/libtorrent/config.hpp b/include/libtorrent/config.hpp
-index 3d0fb5d..e5db989 100644
+index 3d0fb5d..7322038 100644
 --- a/include/libtorrent/config.hpp
 +++ b/include/libtorrent/config.hpp
-@@ -107,13 +107,26 @@ POSSIBILITY OF SUCH DAMAGE.
+@@ -107,13 +107,28 @@ POSSIBILITY OF SUCH DAMAGE.
  
  // set up defines for target environments
  // ==== AMIGA ===
@@ -22,9 +22,11 @@ index 3d0fb5d..e5db989 100644
 +#define TORRENT_HAVE_MMAP 0
 +#define TORRENT_HAS_SYMLINK 0
 +#define TORRENT_HAS_FALLOCATE 0
-+// interfaces from SIOCGIFCONF; routes from them and a connected UDP
-+// socket (enum_net.cpp), since bsdsocket.library has no route table call
-+#define TORRENT_USE_IFCONF 1
++// interfaces from gfot_interfaces() (Roadshow's ObtainInterfaceList() and
++// QueryInterfaceTagList(); GFOpenSocket answers SIOCGIFCONF with
++// EOPNOTSUPP); routes from them and a connected UDP socket (enum_net.cpp),
++// since bsdsocket.library has no route table call
++#define TORRENT_USE_AMIGA_IFQ 1
 +#define TORRENT_USE_UDP_ROUTE 1
 +#ifdef TORRENT_AMIGA_HOST_TEST
 +#define TORRENT_HAS_SALEN 0
@@ -34,7 +36,7 @@ index 3d0fb5d..e5db989 100644
  
  // ==== Darwin/BSD ===
  #elif (defined __APPLE__ && defined __MACH__) || defined __FreeBSD__ || defined __NetBSD__ \
-@@ -553,6 +566,10 @@ POSSIBILITY OF SUCH DAMAGE.
+@@ -553,6 +568,14 @@ POSSIBILITY OF SUCH DAMAGE.
  #define TORRENT_HAS_SYMLINK 0
  #endif
  
@@ -42,11 +44,15 @@ index 3d0fb5d..e5db989 100644
 +#define TORRENT_USE_UDP_ROUTE 0
 +#endif
 +
++#ifndef TORRENT_USE_AMIGA_IFQ
++#define TORRENT_USE_AMIGA_IFQ 0
++#endif
++
  #ifndef TORRENT_USE_IFCONF
  #define TORRENT_USE_IFCONF 0
  #endif
 diff --git a/src/enum_net.cpp b/src/enum_net.cpp
-index a7c3ba7..f31f5ae 100644
+index a7c3ba7..729e698 100644
 --- a/src/enum_net.cpp
 +++ b/src/enum_net.cpp
 @@ -50,6 +50,7 @@ POSSIBILITY OF SUCH DAMAGE.
@@ -57,19 +63,60 @@ index a7c3ba7..f31f5ae 100644
  
  #include "libtorrent/aux_/disable_warnings_push.hpp"
  
-@@ -776,6 +777,11 @@ int _System __libsocket_sysctl(int* mib, u_int namelen, void *oldp, size_t *oldl
+@@ -157,6 +158,22 @@ const unsigned long siocgifmtu = SIOCGIFMTU;
+ #define IF_NAMESIZE IFNAMSIZ
+ #endif
  
- #ifdef _SIZEOF_ADDR_IFREQ
- 			current_size = _SIZEOF_ADDR_IFREQ(item);
-+#elif defined TORRENT_AMIGA && TORRENT_HAS_SALEN
-+			// 4.4BSD stacks: an entry is the name and its address, at least
-+			// a whole ifreq (an AF_LINK address is longer than a sockaddr)
-+			current_size = std::max(int(sizeof(ifreq))
-+				, int(IFNAMSIZ + item.ifr_addr.sa_len));
- #elif defined TORRENT_BSD
- 			current_size = item.ifr_addr.sa_len + IFNAMSIZ;
- #else
-@@ -1072,6 +1078,54 @@ int _System __libsocket_sysctl(int* mib, u_int namelen, void *oldp, size_t *oldl
++#if TORRENT_USE_AMIGA_IFQ
++#include <cstring>
++// gfopentorrent compat/: the stack's IPv4 interfaces, loopback included.
++// Returns how many it filled in, or -1 with errno set.
++extern "C" {
++struct gfot_iface
++{
++	char name[16];
++	unsigned char addr[4];
++	unsigned char mask[4];
++	int up;
++};
++int gfot_interfaces(struct gfot_iface* out, int max);
++}
++#endif
++
+ namespace libtorrent {
+ 
+ namespace {
+@@ -667,6 +684,29 @@ int _System __libsocket_sysctl(int* mib, u_int namelen, void *oldp, size_t *oldl
+ 			std::strcpy(wan.description, "Simulator Ethernet Adapter");
+ 			ret.push_back(wan);
+ 		}
++#elif TORRENT_USE_AMIGA_IFQ
++		TORRENT_UNUSED(ios);
++		gfot_iface rows[16];
++		int const n = gfot_interfaces(rows, 16);
++		if (n < 0)
++		{
++			ec = error_code(errno, system_category());
++			return ret;
++		}
++		for (int k = 0; k < n; ++k)
++		{
++			ip_interface iface;
++			address_v4::bytes_type a, m;
++			std::memcpy(a.data(), rows[k].addr, 4);
++			std::memcpy(m.data(), rows[k].mask, 4);
++			iface.interface_address = address_v4(a);
++			iface.netmask = address_v4(m);
++			std::strncpy(iface.name, rows[k].name, sizeof(iface.name) - 1);
++			iface.name[sizeof(iface.name) - 1] = '\0';
++			iface.flags = rows[k].up ? if_flags::up : interface_flags{};
++			if (iface.interface_address.is_loopback()) iface.flags |= if_flags::loopback;
++			ret.push_back(iface);
++		}
+ #elif TORRENT_USE_NETLINK
+ 		int const sock = ::socket(PF_ROUTE, SOCK_DGRAM | flags, NETLINK_ROUTE);
+ 		if (sock < 0)
+@@ -1072,6 +1112,54 @@ int _System __libsocket_sysctl(int* mib, u_int namelen, void *oldp, size_t *oldl
  			ret.push_back(r);
  		}
  
