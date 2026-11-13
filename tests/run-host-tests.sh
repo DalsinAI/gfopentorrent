@@ -119,3 +119,8 @@ echo "PASS PicoTorrent uses only BOOST_LOG_TRIVIAL ($(grep -rc 'BOOST_LOG_TRIVIA
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" "$HERE/tests/log_shim_test.cpp" \
     "$HERE/compat/gfot_log.cpp" -o "$B/log_shim_test"
 "$B/log_shim_test"
+# PicoTorrent's Environment on AmigaOS (host: GFOT_PROGDIR, GFOT_LANGUAGE)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" -I"$HERE/compat" -I"$PT" \
+    "$HERE/tests/environment_test.cpp" "$HERE/compat/picotorrent/environment_amiga.cpp" \
+    "$HERE/compat/gfot_env.cpp" "$HERE/compat/gfot_log.cpp" -o "$B/environment_test"
+"$B/environment_test"
