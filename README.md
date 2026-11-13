@@ -65,6 +65,18 @@ Asio comes from GFOpenBoost and waits through event.library, so the
 package puts `event.library` in `LIBS:`, as aMule's does. Without it every
 socket call fails with ENOSYS.
 
+## PicoTorrent's logging
+
+GFOpenBoost doesn't build Boost.Log, and PicoTorrent only needs
+`BOOST_LOG_TRIVIAL(level) << ...` (67 lines) plus one file-log setup in its
+Windows-only `core/environment.cpp`. `compat/boostlog/boost/log/trivial.hpp`
+gives that macro: put `compat/boostlog` on PicoTorrent's include path ahead
+of the SDK and link `compat/gfot_log.cpp`. Each statement writes one line in
+PicoTorrent's own format (time, uptime, `[main]`, level, message), to
+stderr until `gfot::log::add_file_log(path)` names a file. Wide text is
+written as UTF-8. There is no lock, because the program runs on one task. The Amiga
+`environment.cpp` calls `add_file_log` in place of Boost.Log's setup.
+
 ## Tests
 
     JOBS=4 tests/run-host-tests.sh
@@ -83,6 +95,8 @@ Boost given the same change as GFOpenBoost's patch 0005) and runs
 `tests/one_task_test.cpp`: the same transfers and a name lookup, all from
 one `io.run()`, while a timer checks the process never has a second thread.
 UDP on the Amiga itself is checked by GFOpenBoost's `UDPLT`.
+Last, it checks that PicoTorrent's sources use no Boost.Log beyond what
+the shim gives, and runs `tests/log_shim_test.cpp`.
 
 `tools/lab-probe/build-amiga.sh` builds `IfqProbe` on the stove: what
 `compat/gfot_ifq_amiga.c` gets from the stack, for a lab run (it needs
