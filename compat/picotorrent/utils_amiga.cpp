@@ -13,7 +13,7 @@
 
 #if defined __amigaos__ || defined __AMIGA__
 #include <proto/exec.h>
-#include <proto/workbench.h>
+#include <proto/wb.h>
 #include <utility/tagitem.h>
 #endif
 

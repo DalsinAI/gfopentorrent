@@ -14,3 +14,12 @@ TRY_SIGNAL_COMMIT=105cce59972f925a33aa6b1c3109e4cd3caf583d
 PICOTORRENT_URL=https://github.com/picotorrent/picotorrent
 PICOTORRENT_TAG=v0.25.0
 PICOTORRENT_COMMIT=c2ad8e2d69773293e116ac08e228d21d98a55892
+# PicoTorrent's own libraries, header-only here: fmt (MIT) and nlohmann
+# json (MIT). fmt 7: PicoTorrent formats std::wstring through
+# <fmt/format.h>, which fmt 8 moved to <fmt/xchar.h>
+FMT_URL=https://github.com/fmtlib/fmt
+FMT_TAG=7.1.3
+FMT_COMMIT=7bdf0628b1276379886c7f6dda2cef2b3b374f0b
+JSON_URL=https://github.com/nlohmann/json
+JSON_TAG=v3.11.3
+JSON_COMMIT=9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03
