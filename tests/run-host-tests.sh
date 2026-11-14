@@ -156,6 +156,14 @@ if [ -n "$odd" ]; then
     echo "FAIL a std::string is made from a wxString without ToStdString():"; echo "$odd" | head -20; exit 1
 fi
 echo "PASS every std::string from a wxString goes through ToStdString()"
+# One copy at a time over ARexx, and the tray settings (patch 0004)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/single_copy_test.cpp" \
+    "$HERE/compat/gfot_rexx.cpp" "$HERE/compat/gfot_settings.cpp" -o "$B/single_copy_test"
+"$B/single_copy_test"
+# free space on the save volume, in place of GetDiskFreeSpaceEx (patch 0004)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/disk_space_test.cpp" \
+    "$HERE/compat/gfot_disk.cpp" -o "$B/disk_space_test"
+"$B/disk_space_test" "$B"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"

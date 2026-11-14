@@ -1,0 +1,418 @@
+GFOpenTorrent: one copy at a time through an ARexx port, no tray, and
+free space through Info().
+AmigaOS has no named mutex, DDE, tray icon or taskbar button: application
+asks the first copy's port (GFOPENTORRENT.1, compat/gfot_rexx.cpp) in
+place of wxSingleInstanceChecker and wxClient; ipc/server.hpp declares the
+ARexx server (compat/picotorrent/ipc_server_amiga.cpp); the tray icon and
+taskbar button are nothing (compat/gfot_notray.hpp); Configuration reads
+the tray settings as false (compat/gfot_settings.cpp); libpico.h has no
+dllexport; MainFrame asks the save volume's free space through
+compat/gfot_disk.cpp in place of GetDiskFreeSpaceEx and sets no window
+icon (Workbench windows have none; the icon is the .info file) and,
+after Preferences, restarts through wxStandardPaths; a .torrent file
+opens by its toolkit file name (libstdc++ takes no wstring). Each
+change sits under __WXOPENLAYOUT__, Windows' code as it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/include/libpico.h b/include/libpico.h
+index 724364f..ff3125a 100644
+--- a/include/libpico.h
++++ b/include/libpico.h
+@@ -8,13 +8,25 @@
+ #define LIBPICO_STRINGIFY(x) #x
+ #define LIBPICO_TOSTRING(x) LIBPICO_STRINGIFY(x)
+ 
++#if defined(_WIN32)
+ #define LIBPICO_DEFINE_PLUGIN(name,version,init_func) \
+     extern "C" __declspec(dllexport) libpico_result_t LIBPICO_INIT(int v, libpico_plugin_t* a) \
+     { \
+         return init_func(v,a); \
+     }
++#else
++/* GFOpenTorrent: no DLLs on AmigaOS, so plugins link in */
++#define LIBPICO_DEFINE_PLUGIN(name,version,init_func) \
++    extern "C" libpico_result_t LIBPICO_INIT(int v, libpico_plugin_t* a) \
++    { \
++        return init_func(v,a); \
++    }
++#endif
+ 
+-#if defined(LIBPICO_API_EXPORT)
++#if !defined(_WIN32)
++#define LIBPICO_API_FUNCTION \
++    extern "C"
++#elif defined(LIBPICO_API_EXPORT)
+ #define LIBPICO_API_FUNCTION \
+     extern "C" __declspec(dllexport)
+ #else
+diff --git a/src/picotorrent/application.cpp b/src/picotorrent/application.cpp
+index 42d553e..5e58521 100644
+--- a/src/picotorrent/application.cpp
++++ b/src/picotorrent/application.cpp
+@@ -3,10 +3,14 @@
+ #include <boost/log/trivial.hpp>
+ #include <nlohmann/json.hpp>
+ #include <wx/cmdline.h>
++#ifdef __WXOPENLAYOUT__
++#include "gfot_rexx.hpp"
++#else
+ #include <wx/ipc.h>
+ #include <wx/persist.h>
+ #include <wx/snglinst.h>
+ #include <wx/taskbarbutton.h>
++#endif
+ 
+ #include "api/libpico_impl.hpp"
+ #include "crashpadinitializer.hpp"
+@@ -22,10 +26,14 @@ using json = nlohmann::json;
+ using pt::Application;
+ 
+ Application::Application()
+-    : wxApp(),
+-    m_singleInstance(std::make_unique<wxSingleInstanceChecker>("584c8e47-d8a5-4e52-9165-c0650a85723a"))
++    : wxApp()
++#ifndef __WXOPENLAYOUT__
++    , m_singleInstance(std::make_unique<wxSingleInstanceChecker>("584c8e47-d8a5-4e52-9165-c0650a85723a"))
++#endif
+ {
++#ifndef __WXOPENLAYOUT__
+     SetProcessDPIAware();
++#endif
+ }
+ 
+ Application::~Application()
+@@ -79,7 +87,11 @@ bool Application::OnInit()
+         WaitForPreviousInstance(m_options.pid);
+     }
+ 
++#ifdef __WXOPENLAYOUT__
++    if (gfot::rexx::first_running())
++#else
+     if (m_singleInstance->IsAnotherRunning())
++#endif
+     {
+         ActivateOtherInstance();
+         return false;
+@@ -199,6 +211,16 @@ void Application::ActivateOtherInstance()
+     j["silent"] = m_options.silent;
+     j["save_path"] = m_options.save_path;
+ 
++#ifdef __WXOPENLAYOUT__
++    for (auto const& command : gfot::rexx::commands(m_options.files, m_options.magnets, m_options.save_path, m_options.silent))
++    {
++        if (!gfot::rexx::send(command))
++        {
++            BOOST_LOG_TRIVIAL(warning) << "The running copy did not take: " << command;
++        }
++    }
++    (void)j;
++#else
+     wxClient client;
+     auto conn = client.MakeConnection(
+         "localhost",
+@@ -210,12 +232,19 @@ void Application::ActivateOtherInstance()
+         conn->Execute(j.dump());
+         conn->Disconnect();
+     }
++#endif
+ }
+ 
+ void Application::WaitForPreviousInstance(long pid)
+ {
++#ifdef __WXOPENLAYOUT__
++    // no process ids to wait on: wait for the old copy's port to go
++    (void)pid;
++    gfot::rexx::wait_gone(10000);
++#else
+     HANDLE hProc = OpenProcess(SYNCHRONIZE, FALSE, pid);
+     if (hProc == NULL) { return; }
+     WaitForSingleObject(hProc, 10000);
+     CloseHandle(hProc);
++#endif
+ }
+diff --git a/src/picotorrent/application.hpp b/src/picotorrent/application.hpp
+index b2a5002..c30d7f0 100644
+--- a/src/picotorrent/application.hpp
++++ b/src/picotorrent/application.hpp
+@@ -36,6 +36,8 @@ namespace API
+         pt::CommandLineOptions m_options;
+         std::vector<API::IPlugin*> m_plugins;
+         std::unique_ptr<PersistenceManager> m_persistence;
++#ifndef __WXOPENLAYOUT__
+         std::unique_ptr<wxSingleInstanceChecker> m_singleInstance;
++#endif
+     };
+ }
+diff --git a/src/picotorrent/core/configuration.cpp b/src/picotorrent/core/configuration.cpp
+index 79d4c98..7d2125e 100644
+--- a/src/picotorrent/core/configuration.cpp
++++ b/src/picotorrent/core/configuration.cpp
+@@ -1,4 +1,7 @@
+ #include "configuration.hpp"
++#ifdef __WXOPENLAYOUT__
++#include "gfot_settings.hpp"
++#endif
+ 
+ #include <filesystem>
+ #include <fstream>
+@@ -31,6 +34,9 @@ bool Configuration::GetValue(std::string const& key, std::string& val)
+     }
+ 
+     val = stmt->GetString(0);
++#ifdef __WXOPENLAYOUT__
++    gfot::settings::adjust(key, val);
++#endif
+ 
+     return true;
+ }
+diff --git a/src/picotorrent/ipc/applicationoptionsconnection.cpp b/src/picotorrent/ipc/applicationoptionsconnection.cpp
+index ce80706..63d025b 100644
+--- a/src/picotorrent/ipc/applicationoptionsconnection.cpp
++++ b/src/picotorrent/ipc/applicationoptionsconnection.cpp
+@@ -1,3 +1,5 @@
++// GFOpenTorrent: Windows only; AmigaOS has compat/ in its place
++#ifndef __WXOPENLAYOUT__
+ #include "applicationoptionsconnection.hpp"
+ 
+ #include <boost/log/trivial.hpp>
+@@ -54,3 +56,4 @@ bool ApplicationOptionsConnection::OnExecute(const wxString&, const void *data,
+ 
+     return true;
+ }
++#endif
+diff --git a/src/picotorrent/ipc/applicationoptionsconnection.hpp b/src/picotorrent/ipc/applicationoptionsconnection.hpp
+index c282bef..cfb6ddc 100644
+--- a/src/picotorrent/ipc/applicationoptionsconnection.hpp
++++ b/src/picotorrent/ipc/applicationoptionsconnection.hpp
+@@ -1,3 +1,5 @@
++// GFOpenTorrent: Windows only; AmigaOS has compat/ in its place
++#ifndef __WXOPENLAYOUT__
+ #pragma once
+ 
+ #include <wx/wxprec.h>
+@@ -26,3 +28,4 @@ namespace IPC
+     };
+ }
+ }
++#endif
+diff --git a/src/picotorrent/ipc/server.hpp b/src/picotorrent/ipc/server.hpp
+index 4733f07..bf9dd45 100644
+--- a/src/picotorrent/ipc/server.hpp
++++ b/src/picotorrent/ipc/server.hpp
+@@ -5,7 +5,12 @@
+ #include <wx/wx.h>
+ #endif
+ 
++#ifdef __WXOPENLAYOUT__
++#include <memory>
++class wxARexxPort;
++#else
+ #include <wx/ipc.h>
++#endif
+ 
+ namespace pt
+ {
+@@ -15,6 +20,18 @@ namespace UI
+ }
+ namespace IPC
+ {
++#ifdef __WXOPENLAYOUT__
++    class Server
++    {
++    public:
++        Server(UI::MainFrame* mainFrame);
++        ~Server();
++
++    private:
++        UI::MainFrame* m_frame;
++        std::unique_ptr<wxARexxPort> m_rexx;
++    };
++#else
+     class Server : public wxServer
+     {
+     public:
+@@ -26,5 +43,6 @@ namespace IPC
+     private:
+         UI::MainFrame* m_frame;
+     };
++#endif
+ }
+ }
+diff --git a/src/picotorrent/ui/mainframe.cpp b/src/picotorrent/ui/mainframe.cpp
+index 13b5a81..9b9af9c 100644
+--- a/src/picotorrent/ui/mainframe.cpp
++++ b/src/picotorrent/ui/mainframe.cpp
+@@ -12,7 +12,13 @@
+ #include <wx/persist/toplevel.h>
+ #include <wx/sizer.h>
+ #include <wx/splitter.h>
++#ifndef __WXOPENLAYOUT__
+ #include <wx/taskbarbutton.h>
++#else
++#include <cstdint>
++#include <wx/stdpaths.h>
++#include "gfot_disk.hpp"
++#endif
+ 
+ #include "../applicationoptions.hpp"
+ #include "../bittorrent/addparams.hpp"
+@@ -95,7 +101,9 @@ MainFrame::MainFrame(std::shared_ptr<pt::Core::Environment> env, std::shared_ptr
+     };
+ 
+     this->SetAcceleratorTable(wxAcceleratorTable(static_cast<int>(entries.size()), entries.data()));
++#ifndef __WXOPENLAYOUT__
+     this->SetIcon(wxICON(AppIcon));
++#endif
+     this->SetMenuBar(this->CreateMainMenu());
+     this->SetSizerAndFit(sizer);
+     this->SetStatusBar(m_statusBar);
+@@ -537,6 +545,12 @@ void MainFrame::CheckDiskSpace(std::vector<pt::BitTorrent::TorrentHandle*> const
+     {
+         auto status = torrent->Status();
+ 
++#ifdef __WXOPENLAYOUT__
++        // free space on the save volume (compat/gfot_disk.cpp)
++        std::uint64_t freeBytes = 0;
++        std::uint64_t totalBytes = 0;
++        bool res = gfot::disk::space(status.savePath, freeBytes, totalBytes);
++#else
+         ULARGE_INTEGER freeBytesAvailableToCaller;
+         ULARGE_INTEGER totalNumberOfBytes;
+         ULARGE_INTEGER totalNumberOfFreeBytes;
+@@ -546,10 +560,15 @@ void MainFrame::CheckDiskSpace(std::vector<pt::BitTorrent::TorrentHandle*> const
+             &freeBytesAvailableToCaller,
+             &totalNumberOfBytes,
+             &totalNumberOfFreeBytes);
++#endif
+ 
+         if (res)
+         {
++#ifdef __WXOPENLAYOUT__
++            float diskSpaceAvailable = gfot::disk::free_part(freeBytes, totalBytes);
++#else
+             float diskSpaceAvailable = static_cast<float>(freeBytesAvailableToCaller.QuadPart) / static_cast<float>(totalNumberOfBytes.QuadPart);
++#endif
+             float diskSpaceLimit = limit / 100.0f;
+ 
+             if (diskSpaceAvailable < diskSpaceLimit)
+@@ -783,6 +802,11 @@ void MainFrame::OnViewPreferences(wxCommandEvent&)
+     {
+         if (dlg.WantsRestart())
+         {
++#ifdef __WXOPENLAYOUT__
++            // the new copy waits for this copy's ARexx port to close
++            wxString proc = "\"" + wxStandardPaths::Get().GetExecutablePath() + "\" --wait-for-pid=1";
++            wxExecute(proc, wxEXEC_ASYNC);
++#else
+             TCHAR path[MAX_PATH];
+             GetModuleFileName(NULL, path, ARRAYSIZE(path));
+ 
+@@ -790,6 +814,7 @@ void MainFrame::OnViewPreferences(wxCommandEvent&)
+             proc << path << L" --wait-for-pid=" << std::to_wstring(GetCurrentProcessId());
+ 
+             wxExecute(proc.str(), wxEXEC_ASYNC);
++#endif
+             Close(true);
+ 
+             return;
+@@ -823,7 +848,11 @@ void MainFrame::ParseTorrentFiles(std::vector<lt::add_torrent_params>& params, s
+         lt::error_code ec;
+         lt::add_torrent_params param;
+ 
++#ifdef __WXOPENLAYOUT__
++        std::ifstream in(static_cast<const char*>(wxString(path).fn_str()), std::ios::binary);
++#else
+         std::ifstream in(path, std::ios::binary);
++#endif
+         std::stringstream ss;
+         ss << in.rdbuf();
+ 
+diff --git a/src/picotorrent/ui/mainframe.hpp b/src/picotorrent/ui/mainframe.hpp
+index 92de4c8..e921a1b 100644
+--- a/src/picotorrent/ui/mainframe.hpp
++++ b/src/picotorrent/ui/mainframe.hpp
+@@ -15,7 +15,11 @@
+ #include "../applicationoptions.hpp"
+ 
+ class wxSplitterWindow;
++#ifdef __WXOPENLAYOUT__
++#include "gfot_notray.hpp"
++#else
+ class wxTaskBarIconEvent;
++#endif
+ 
+ namespace pt::UI::Dialogs { class AddTorrentDialog; }
+ 
+@@ -63,6 +67,11 @@ namespace Models
+ 
+         void HandleParams(pt::CommandLineOptions const& options);
+ 
++#ifdef __WXOPENLAYOUT__
++        // Windows' taskbar button, as nothing (compat/gfot_notray.hpp)
++        wxTaskBarButton* MSWGetTaskBarButton() { return &m_noTaskBarButton; }
++#endif
++
+     private:
+         wxMenuBar* CreateMainMenu();
+ 
+@@ -98,6 +107,9 @@ namespace Models
+         std::shared_ptr<Core::Configuration> m_cfg;
+         std::unique_ptr<IPC::Server> m_ipc;
+         pt::CommandLineOptions m_options;
++#ifdef __WXOPENLAYOUT__
++        wxTaskBarButton m_noTaskBarButton;
++#endif
+ 
+         wxMenu* m_viewMenu;
+         wxMenu* m_filtersMenu;
+diff --git a/src/picotorrent/ui/taskbaricon.cpp b/src/picotorrent/ui/taskbaricon.cpp
+index f7ffe81..9ea54c0 100644
+--- a/src/picotorrent/ui/taskbaricon.cpp
++++ b/src/picotorrent/ui/taskbaricon.cpp
+@@ -1,3 +1,5 @@
++// GFOpenTorrent: Windows only; AmigaOS has compat/ in its place
++#ifndef __WXOPENLAYOUT__
+ #include "taskbaricon.hpp"
+ 
+ #include "ids.hpp"
+@@ -32,3 +34,4 @@ wxMenu* TaskBarIcon::CreatePopupMenu()
+     menu->Append(ptID_EVT_EXIT, i18n("amp_exit"));
+     return menu;
+ }
++#endif
+diff --git a/src/picotorrent/ui/taskbaricon.hpp b/src/picotorrent/ui/taskbaricon.hpp
+index 9d8618a..35b392e 100644
+--- a/src/picotorrent/ui/taskbaricon.hpp
++++ b/src/picotorrent/ui/taskbaricon.hpp
+@@ -5,12 +5,24 @@
+ #include <wx/wx.h>
+ #endif
+ 
++#ifdef __WXOPENLAYOUT__
++#include "gfot_notray.hpp"
++#else
+ #include <wx/taskbar.h>
++#endif
+ 
+ namespace pt
+ {
+ namespace UI
+ {
++#ifdef __WXOPENLAYOUT__
++    // no tray on Workbench (compat/gfot_notray.hpp)
++    class TaskBarIcon : public gfot::NoTaskBarIcon
++    {
++    public:
++        using gfot::NoTaskBarIcon::NoTaskBarIcon;
++    };
++#else
+     class TaskBarIcon : public wxTaskBarIcon
+     {
+     public:
+@@ -25,5 +37,6 @@ namespace UI
+         wxWindow* m_parent;
+         wxIcon m_icon;
+     };
++#endif
+ }
+ }
