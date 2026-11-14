@@ -154,16 +154,21 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
     std::string seed = dir + "/s" + kind, leech = dir + "/l" + kind;
     mkdir(seed.c_str(), 0755);
     mkdir(leech.c_str(), 0755);
+    step_line(kind + ": drawers " + seed + " and " + leech);
     {
         std::ofstream f(seed + "/payload.bin", std::ios::binary);
         for (int i = 0; i < 300 * 1024; i++) f.put(char((i * 131) ^ (i >> 7)));
     }
+    step_line(kind + ": payload written");
     lt::file_storage fs;
     lt::add_files(fs, seed + "/payload.bin");
+    step_line(kind + ": add_files");
     lt::create_torrent ct(fs, 16 * 1024);
     lt::set_piece_hashes(ct, seed);
+    step_line(kind + ": set_piece_hashes");
     std::vector<char> buf;
     lt::bencode(std::back_inserter(buf), ct.generate());
+    step_line(kind + ": bencode");
     auto ti = std::make_shared<lt::torrent_info>(buf, lt::from_span);
     step_line(kind + ": torrent made");
 

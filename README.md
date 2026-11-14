@@ -95,6 +95,14 @@ CPU clock, EClock, free memory, a counter) through SplitMix64. That's
 enough for peer and DHT IDs and tokens, but not for keys; a real source can
 come from GFOpenTLS.
 
+**AmigaDOS paths.** Patch 0005 teaches libtorrent's path code about a
+volume's colon. `Work:a` is complete, so `complete()` doesn't prepend the
+current directory. Nothing is added after the colon (`T:` + `gfot1` is
+`T:gfot1`, not `T:/gfot1`). `Work:` is a root, and the parent of `Work:a`
+is `Work:`. `current_working_directory()` passes `getcwd()` a buffer,
+because libnix's doesn't allocate one: `getcwd(nullptr, 0)` failed with
+errno 7.
+
 **No peer encryption yet.** libtorrent is built with `-Dencryption=OFF`
 (no OpenSSL, no GnuTLS), which also turns off protocol encryption (PE/MSE).
 Peers that insist on it won't connect. PE needs only RC4 and a
