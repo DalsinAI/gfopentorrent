@@ -195,6 +195,8 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/link_stag
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -DGFOT_SQLVFS_HOST_TEST -I"$HERE/compat" "$HERE/tests/sqlvfs_test.cpp" \
     "$HERE/compat/gfot_sqlvfs.cpp" -o "$B/sqlvfs_test"
 "$B/sqlvfs_test" "$HERE"
+# the translations database (coredb.sqlite) from lang/*.json
+python3 "$HERE/tests/coredb_test.py" "$HERE" "$PT/.."
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"

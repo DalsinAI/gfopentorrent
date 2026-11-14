@@ -94,6 +94,8 @@ if m68k-amigaos-g++ -noixemul -m68040 -o "$WORK/GFOpenTorrent" $objs \
     "$SQLITE_LIB" $("$WX/bin/wx-config" --libs std,net) > "$O/link.log" 2>&1
 then
     echo "linked $WORK/GFOpenTorrent ($(wc -c < "$WORK/GFOpenTorrent") bytes)"
+    # the translations, which PicoTorrent-coredb makes on Windows
+    python3 "$HERE/tools/stove/gen-coredb.py" "$P/lang" "$WORK/coredb.sqlite"
 else
     echo "link FAILED; missing:"
     grep -o "undefined reference to \`[^']*'" "$O/link.log" | sort | uniq -c | sort -rn | head -40
