@@ -194,6 +194,9 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/one_loop_
 # no Windows resources on the Amiga side (patch 0012)
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra "$HERE/tests/no_resources_test.cpp" -o "$B/no_resources_test"
 "$B/no_resources_test" "$PT/picotorrent"
+# the main window's first size (patch 0013)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/window_size_test.cpp" -o "$B/window_size_test"
+"$B/window_size_test" "$PT/picotorrent"
 # what the Amiga link needs: the file picker, the crash stub, the stove link
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/link_stage_test.cpp" -o "$B/link_stage_test"
 "$B/link_stage_test" "$HERE" "$PT/picotorrent"

@@ -1,0 +1,38 @@
+GFOpenTorrent: the main window's first size on AmigaOS. Windows sets
+450x400 device-independent pixels; with the toolkit's 72 DPI that came
+out near 340x300 on a 1920x1080 Workbench. On first start it is three
+fifths of the screen's free area, at least 640x400, centred
+(compat/gfot_window.hpp); a saved size still wins. Under
+__WXOPENLAYOUT__, Windows' code as it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/mainframe.cpp b/src/picotorrent/ui/mainframe.cpp
+index b26219a..8a265f5 100644
+--- a/src/picotorrent/ui/mainframe.cpp
++++ b/src/picotorrent/ui/mainframe.cpp
+@@ -47,6 +47,9 @@
+ #include "torrentdetailsview.hpp"
+ #include "torrentlistview.hpp"
+ #include "translator.hpp"
++#ifdef __WXOPENLAYOUT__
++#include "gfot_window.hpp"
++#endif
+ 
+ #include "win32/openfiledialog.hpp"
+ 
+@@ -135,7 +138,15 @@ MainFrame::MainFrame(std::shared_ptr<pt::Core::Environment> env, std::shared_ptr
+ 
+     if (!wxPersistenceManager::Get().RegisterAndRestore(this))
+     {
++#ifdef __WXOPENLAYOUT__
++        // first start: three fifths of the screen (compat/gfot_window.hpp)
++        wxRect area = wxGetClientDisplayRect();
++        gfot::window::size first = gfot::window::first_size(area.width, area.height);
++        this->SetSize(wxSize(first.w, first.h));
++        this->Centre();
++#else
+         this->SetSize(FromDIP(wxSize(450, 400)));
++#endif
+     }
+ 
+     // Session events
