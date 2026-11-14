@@ -79,6 +79,19 @@ int main(int argc, char** argv)
     check(has(sh, "libtorrent-rasterbar.a\" \"$LT_BUILD\"/gfot_*.o") && has(sh, "\"$SQLITE_LIB\" $(\"$WX/bin/wx-config\" --libs std,net)"),
         "linked with libtorrent, its Amiga objects, SQLite and the toolkit (with its net library)");
     check(has(sh, "exit 4"), "a failed link exits 4 with the missing symbols");
+    check(has(sh, "stoves/os32-gcc16-open8\"}") && !has(sh, "open6"),
+        "built on the open8 stove (open6 -O2 -m68040 byte-store fault)");
+
+    std::string disk = slurp(repo + "/compat/gfot_disk.cpp");
+    std::size_t off = disk.find("me->pr_WindowPtr = (APTR)-1;");
+    std::size_t lk = disk.find("Lock((CONST_STRPTR)path.c_str()");
+    std::size_t back = disk.find("me->pr_WindowPtr = window;");
+    check(off != std::string::npos && lk != std::string::npos && back != std::string::npos
+        && off < lk && lk < back && back < disk.find("if (!lock)"),
+        "free space: no insert-volume requester around the Lock, window put back before any return");
+    std::string rexx = slurp(repo + "/compat/gfot_rexx.cpp");
+    check(has(rexx, "Nothing else in the program may") && has(rexx, "must\n// open its own base"),
+        "RexxSysBase: nothing else may use it, said where it is defined");
 
     std::printf("%d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;

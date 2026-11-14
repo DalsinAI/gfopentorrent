@@ -5,7 +5,7 @@
 # object and errors go to WORK/picotorrent-obj; the report says which
 # compile. When they all do, they are linked into WORK/GFOpenTorrent with
 # the Amiga libtorrent, GFOpenBoost, SQLite and the toolkit's libraries.
-#   STOVE=.../stoves/os32-gcc16-open6 WX=<toolkit sdk> GFOPENBOOST_SDK=<sdk> \
+#   STOVE=.../stoves/os32-gcc16-open8 WX=<toolkit sdk> GFOPENBOOST_SDK=<sdk> \
 #       SQLITE_INCLUDE=<dir with sqlite3.h> [SQLITE_LIB=<libsqlite3.a>] \
 #       [LT_BUILD=<Amiga libtorrent build dir>] tools/stove/build-picotorrent.sh
 # WX is a GFOpenWX Toolkit sdk/ (bin/wx-config). LT_BUILD (default
@@ -22,7 +22,7 @@ set -eu
 renice -n 19 $$ >/dev/null 2>&1 || true
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 . "$HERE/torrent.lock"
-STOVE=${STOVE:-"$HOME/AmiCradle/stoves/os32-gcc16-open6"}
+STOVE=${STOVE:-"$HOME/AmiCradle/stoves/os32-gcc16-open8"}
 TC=${TOOLCHAIN:-"$STOVE/prefix"}
 WX=${WX:?set WX to a GFOpenWX Toolkit sdk/ directory}
 SDK=${GFOPENBOOST_SDK:?set GFOPENBOOST_SDK to an unpacked GFOpenBoost SDK}

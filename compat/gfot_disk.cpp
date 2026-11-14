@@ -6,12 +6,20 @@
 #include <proto/dos.h>
 #include <proto/exec.h>
 #include <dos/dos.h>
+#include <dos/dosextens.h>
 #include <exec/memory.h>
 
 bool gfot::disk::space(std::string const& path, std::uint64_t& free, std::uint64_t& total)
 {
     free = total = 0;
+    // A volume that is not mounted (a card or stick taken out) must read as
+    // "no answer", not put up the system's "Please insert volume" requester
+    // on every tick: no requesters for this process around the Lock.
+    struct Process* me = (struct Process*)FindTask(nullptr);
+    APTR window = me->pr_WindowPtr;
+    me->pr_WindowPtr = (APTR)-1;
     BPTR lock = Lock((CONST_STRPTR)path.c_str(), SHARED_LOCK);
+    me->pr_WindowPtr = window;
     if (!lock)
     {
         return false;
