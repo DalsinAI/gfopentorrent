@@ -1,0 +1,46 @@
+GFOpenTorrent: three dialogs without wx's implicit wxString to std::string
+conversion, which the GFOpenWX Toolkit builds off
+(wxUSE_STD_STRING_CONV_IN_WXSTRING 0): they call ToStdString(). The
+create-torrent dialog adds its three modes one by one, as wxChoice's
+Append of a braced list is ambiguous there.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/dialogs/addmagnetlinkdialog.cpp b/src/picotorrent/ui/dialogs/addmagnetlinkdialog.cpp
+index e15bba1..954c724 100644
+--- a/src/picotorrent/ui/dialogs/addmagnetlinkdialog.cpp
++++ b/src/picotorrent/ui/dialogs/addmagnetlinkdialog.cpp
+@@ -77,7 +77,7 @@ std::vector<libtorrent::add_torrent_params> AddMagnetLinkDialog::GetParams()
+ 
+     while (tokenizer.HasMoreTokens())
+     {
+-        std::string token = tokenizer.GetNextToken();
++        std::string token = tokenizer.GetNextToken().ToStdString();
+         if (!IsMagnetLinkOrInfoHash(token)) { continue; }
+ 
+         switch (token.size())
+diff --git a/src/picotorrent/ui/dialogs/addtrackerdialog.cpp b/src/picotorrent/ui/dialogs/addtrackerdialog.cpp
+index 72a047f..0d70e01 100644
+--- a/src/picotorrent/ui/dialogs/addtrackerdialog.cpp
++++ b/src/picotorrent/ui/dialogs/addtrackerdialog.cpp
+@@ -45,7 +45,7 @@ AddTrackerDialog::AddTrackerDialog(wxWindow* parent, wxWindowID id)
+ 
+             if (clipboard->GetData(data))
+             {
+-                std::string d = data.GetText();
++                std::string d = data.GetText().ToStdString();
+ 
+                 auto colIdx = d.find_first_of(':');
+                 bool maybeUrl = colIdx != std::string::npos
+diff --git a/src/picotorrent/ui/dialogs/createtorrentdialog.cpp b/src/picotorrent/ui/dialogs/createtorrentdialog.cpp
+index 0bc9613..e3dcb58 100644
+--- a/src/picotorrent/ui/dialogs/createtorrentdialog.cpp
++++ b/src/picotorrent/ui/dialogs/createtorrentdialog.cpp
+@@ -102,7 +102,7 @@ CreateTorrentDialog::CreateTorrentDialog(wxWindow* parent, wxWindowID id, std::s
+ 
+     auto optionsSizer = new wxStaticBoxSizer(wxHORIZONTAL, this, i18n("options"));
+     m_mode = new wxChoice(optionsSizer->GetStaticBox(), wxID_ANY);
+-    m_mode->Append({ i18n("mode_v1"), i18n("mode_hybrid"), i18n("mode_v2") });
++    for (auto const& mode : { i18n("mode_v1"), i18n("mode_hybrid"), i18n("mode_v2") }) { m_mode->Append(mode); }
+     m_mode->Select(1);
+ 
+     m_private = new wxCheckBox(optionsSizer->GetStaticBox(), wxID_ANY, i18n("private"));

@@ -149,6 +149,13 @@ if ! awk '/#include <Windows.h>/ && prev != "#ifdef _WIN32" { bad = 1 } { prev =
     echo "FAIL translator.hpp includes Windows.h outside _WIN32"; exit 1
 fi
 echo "PASS translator.hpp keeps Windows.h inside _WIN32"
+# patch 0003: no std::string is made straight from a wxString getter (the
+# toolkit has wx's implicit conversion off)
+odd=$(grep -rnE 'std::string [A-Za-z_]+ = [^;]*\.(GetText|GetNextToken|GetValue|GetString)\(\);' --include=*.cpp "$PT" || true)
+if [ -n "$odd" ]; then
+    echo "FAIL a std::string is made from a wxString without ToStdString():"; echo "$odd" | head -20; exit 1
+fi
+echo "PASS every std::string from a wxString goes through ToStdString()"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"
