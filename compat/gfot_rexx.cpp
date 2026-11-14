@@ -52,7 +52,11 @@ std::vector<std::string> gfot::rexx::commands(
 }
 
 #if defined __amigaos__ || defined __AMIGA__
-// opened only while send() runs (proto/rexxsyslib.h names it this way)
+// Opened only while send() runs and NULL at every other time
+// (proto/rexxsyslib.h names it this way). Nothing else in the program may
+// call rexxsyslib.library through it: the toolkit's port goes through
+// arexx.class, and code linked later that needs rexxsyslib.library must
+// open its own base rather than rely on this one.
 struct RxsLib* RexxSysBase;
 
 bool gfot::rexx::first_running()
