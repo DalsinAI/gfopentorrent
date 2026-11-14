@@ -1,0 +1,128 @@
+GFOpenTorrent: the database without Windows' shell.
+The migrations' SQL functions get_known_folder_path and
+get_user_default_ui_language answer through compat/gfot_db.cpp: the
+download drawer from Environment (given to the function as its SQLite
+user data) and a fixed language id (the language comes from locale_name).
+The database file name is the path's own string. Each change sits under
+__WXOPENLAYOUT__, Windows' code as it was. Migrate() reads the migrations
+from the table tools/stove/gen-migrations.sh writes from resources.rc,
+in place of EnumResourceNames.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/core/database.cpp b/src/picotorrent/core/database.cpp
+index 84aedc3..bf230b4 100644
+--- a/src/picotorrent/core/database.cpp
++++ b/src/picotorrent/core/database.cpp
+@@ -1,8 +1,12 @@
+ #include "database.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++#include "gfot_db.hpp"
++#else
+ #include <Windows.h>
+ #include <ShlObj.h>
+ #include <Shlwapi.h>
++#endif
+ 
+ #include <filesystem>
+ #include <vector>
+@@ -22,6 +26,7 @@ struct Migration
+     std::string sql;
+ };
+ 
++#ifndef __WXOPENLAYOUT__
+ static BOOL CALLBACK EnumMigrations(HMODULE hModule, LPCTSTR lpszType, LPTSTR lpszName, LONG_PTR lParam)
+ {
+     std::vector<Migration>* migrations = reinterpret_cast<std::vector<Migration>*>(lParam);
+@@ -39,6 +44,7 @@ static BOOL CALLBACK EnumMigrations(HMODULE hModule, LPCTSTR lpszType, LPTSTR lp
+ 
+     return TRUE;
+ }
++#endif
+ 
+ Database::Statement::Statement(sqlite3_stmt* stmt)
+     : m_stmt(stmt)
+@@ -148,7 +154,11 @@ Database::Database(std::shared_ptr<pt::Core::Environment> env)
+     : m_env(env)
+ {
+     fs::path dbFile = env->GetDatabaseFilePath();
++#ifdef __WXOPENLAYOUT__
++    std::string convertedPath = dbFile.string();
++#else
+     std::string convertedPath = Utils::toStdString(dbFile.wstring());
++#endif
+ 
+     BOOST_LOG_TRIVIAL(info) << "Loading PicoTorrent database from " << convertedPath;
+ 
+@@ -161,7 +171,11 @@ Database::Database(std::shared_ptr<pt::Core::Environment> env)
+         "get_known_folder_path",
+         1,
+         SQLITE_ANY,
++#ifdef __WXOPENLAYOUT__
++        m_env.get(),
++#else
+         nullptr,
++#endif
+         GetKnownFolderPath,
+         nullptr,
+         nullptr);
+@@ -200,11 +214,22 @@ bool Database::Migrate()
+ 
+     std::vector<Migration> migrations;
+ 
++#ifdef __WXOPENLAYOUT__
++    // the migrations, built in (tools/stove/gen-migrations.sh)
++    for (std::size_t i = 0; i < gfot::db::migration_count; i++)
++    {
++        Migration m;
++        m.name = gfot::db::migrations[i].name;
++        m.sql = gfot::db::migrations[i].sql;
++        migrations.push_back(m);
++    }
++#else
+     EnumResourceNames(
+         NULL,
+         TEXT("DBMIGRATION"),
+         &EnumMigrations,
+         reinterpret_cast<LONG_PTR>(&migrations));
++#endif
+ 
+     BOOST_LOG_TRIVIAL(info) << "Found " << migrations.size() << " migrations";
+ 
+@@ -277,6 +302,19 @@ std::shared_ptr<Database::Statement> Database::CreateStatement(std::string const
+ 
+ void Database::GetKnownFolderPath(sqlite3_context* ctx, int argc, sqlite3_value** argv)
+ {
++#ifdef __WXOPENLAYOUT__
++    // the download drawer (compat/gfot_db.cpp); NULL for any other folder
++    auto env = static_cast<pt::Core::Environment*>(sqlite3_user_data(ctx));
++    if (argc > 0 && env && sqlite3_value_text(argv[0]))
++    {
++        std::string res;
++        std::string downloads = env->GetKnownFolderPath(pt::Core::Environment::KnownFolder::UserDownloads).string();
++        if (gfot::db::known_folder_path((const char*)sqlite3_value_text(argv[0]), downloads, res))
++        {
++            sqlite3_result_text(ctx, res.c_str(), -1, SQLITE_TRANSIENT);
++        }
++    }
++#else
+     if (argc > 0)
+     {
+         std::string folderId((const char*)sqlite3_value_text(argv[0]));
+@@ -300,11 +338,16 @@ void Database::GetKnownFolderPath(sqlite3_context* ctx, int argc, sqlite3_value*
+             sqlite3_result_text(ctx, res.c_str(), -1, SQLITE_TRANSIENT);
+         }
+     }
++#endif
+ }
+ 
+ void Database::GetUserDefaultUILanguage(sqlite3_context* ctx, int, sqlite3_value**)
+ {
++#ifdef __WXOPENLAYOUT__
++    sqlite3_result_int(ctx, gfot::db::user_default_ui_language());
++#else
+     sqlite3_result_int(ctx, static_cast<int>(::GetUserDefaultUILanguage()));
++#endif
+ }
+ 
+ bool Database::MigrationExists(std::string const& name)
