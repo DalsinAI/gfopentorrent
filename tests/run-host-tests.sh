@@ -191,6 +191,10 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/no_pql_te
 # what the Amiga link needs: the file picker, the crash stub, the stove link
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/link_stage_test.cpp" -o "$B/link_stage_test"
 "$B/link_stage_test" "$HERE" "$PT/picotorrent"
+# SQLite's file names on AmigaOS
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -DGFOT_SQLVFS_HOST_TEST -I"$HERE/compat" "$HERE/tests/sqlvfs_test.cpp" \
+    "$HERE/compat/gfot_sqlvfs.cpp" -o "$B/sqlvfs_test"
+"$B/sqlvfs_test" "$HERE"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"
