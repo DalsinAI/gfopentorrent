@@ -3,14 +3,20 @@
 # one by one, against the GFOpenWX Toolkit SDK, with this repository's
 # patches and its Amiga files in place of the Windows ones. Each source's
 # object and errors go to WORK/picotorrent-obj; the report says which
-# compile. Linking comes once they all do.
+# compile. When they all do, they are linked into WORK/GFOpenTorrent with
+# the Amiga libtorrent, GFOpenBoost, SQLite and the toolkit's libraries.
 #   STOVE=.../stoves/os32-gcc16-open6 WX=<toolkit sdk> GFOPENBOOST_SDK=<sdk> \
-#       SQLITE_INCLUDE=<dir with sqlite3.h> tools/stove/build-picotorrent.sh
-# WX is a GFOpenWX Toolkit sdk/ (bin/wx-config). Exit 0 when every source
-# compiles, 3 when some do not yet (the report lists them).
-# Not built for the Amiga: crashpad, geoip, l10n (a build-machine tool),
-# resources.rc (Windows resources) and the Windows-only openfiledialog
-# (wx's own file dialog is used).
+#       SQLITE_INCLUDE=<dir with sqlite3.h> [SQLITE_LIB=<libsqlite3.a>] \
+#       [LT_BUILD=<Amiga libtorrent build dir>] tools/stove/build-picotorrent.sh
+# WX is a GFOpenWX Toolkit sdk/ (bin/wx-config). LT_BUILD (default
+# WORK/amiga-build) holds libtorrent-rasterbar.a, its gfot_*.o and its
+# CMake flags; PicoTorrent is compiled with the same libtorrent defines, as
+# they choose its ABI namespace. Exit 0 when it links, 3 when some sources
+# do not compile yet (the report lists them), 4 when the link fails (the
+# missing symbols are listed).
+# Not built for the Amiga: crashpad (a stub that does nothing), geoip, l10n
+# (a build-machine tool), resources.rc (Windows resources) and the Windows
+# openfiledialog (the same class over wx's own file dialog).
 # Copyright (c) 2026 AmiCradle Team. MIT licence.
 set -eu
 renice -n 19 $$ >/dev/null 2>&1 || true
@@ -22,9 +28,17 @@ WX=${WX:?set WX to a GFOpenWX Toolkit sdk/ directory}
 SDK=${GFOPENBOOST_SDK:?set GFOPENBOOST_SDK to an unpacked GFOpenBoost SDK}
 SQLITE_INCLUDE=${SQLITE_INCLUDE:?set SQLITE_INCLUDE to a directory with sqlite3.h}
 WORK=${WORK:-"$HOME/.cache/gfopentorrent"}
+SQLITE_LIB=${SQLITE_LIB:-"$SQLITE_INCLUDE/../lib/libsqlite3.a"}
+LT_BUILD=${LT_BUILD:-"$WORK/amiga-build"}
 PATH="$TC/bin:$PATH"
 [ -x "$WX/bin/wx-config" ] || { echo "$WX has no bin/wx-config"; exit 1; }
 [ -f "$SQLITE_INCLUDE/sqlite3.h" ] || { echo "no sqlite3.h in $SQLITE_INCLUDE"; exit 1; }
+[ -f "$SQLITE_LIB" ] || { echo "no $SQLITE_LIB (set SQLITE_LIB)"; exit 1; }
+LT_FLAGS="$LT_BUILD/CMakeFiles/torrent-rasterbar.dir/flags.make"
+[ -f "$LT_BUILD/libtorrent-rasterbar.a" ] && [ -f "$LT_FLAGS" ] \
+    || { echo "no Amiga libtorrent build in $LT_BUILD (set LT_BUILD)"; exit 1; }
+# libtorrent's own defines, less the one that says "building the library"
+LT_DEFS=$(sed -n 's/^CXX_DEFINES = //p' "$LT_FLAGS" | tr ' ' '\n' | grep -v '^-DTORRENT_BUILDING_LIBRARY$' | tr '\n' ' ')
 WORK="$WORK/src" sh "$HERE/scripts/fetch-sources.sh" libtorrent picotorrent fmt json
 S="$WORK/src"; P="$S/picotorrent"
 # the Amiga files in place of the Windows ones
@@ -38,7 +52,7 @@ sed -e "s/@GITVERSION_VAR_SHORTSHA@/$(echo "$PICOTORRENT_COMMIT" | cut -c1-8)/g"
 CXXF="-noixemul -m68040 -O2 -std=gnu++17 $("$WX/bin/wx-config" --cxxflags) -DFMT_HEADER_ONLY -DBOOST_ALL_NO_LIB
  -DPICO_VERSION_MAJOR=0 -DPICO_VERSION_MINOR=25 -DPICO_VERSION_PATCH=0 -I$P/include -I$P/src
  -I$HERE/compat -I$HERE/compat/boostlog -I$S/libtorrent/include -I$SDK/include -I$S/fmt/include
- -I$S/json/include -idirafter $SQLITE_INCLUDE"
+ -I$S/json/include -idirafter $SQLITE_INCLUDE $LT_DEFS"
 O="$WORK/picotorrent-obj"
 mkdir -p "$O"
 # the database migrations, which Windows keeps as resources
@@ -60,5 +74,29 @@ for f in $srcs; do
 done
 for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http gfot_netif gfot_pql; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
 compile "$O/gfot_migrations.cpp" "$O/gfot_migrations.o"
+for c in openfiledialog_amiga crashpadinitializer_amiga; do compile "$HERE/compat/picotorrent/$c.cpp" "$O/$c.o"; done
+if m68k-amigaos-gcc -noixemul -m68040 -O2 -c "$HERE/compat/gfot_posix.c" -o "$O/gfot_posix.o" 2> "$O/gfot_posix.o.err"
+then ok=$((ok + 1)); else bad=$((bad + 1)); echo "FAIL compat/gfot_posix.c"; fi
 echo "picotorrent: $ok compiled, $bad not yet"
 [ "$bad" = 0 ] || exit 3
+# The link. GFOpenBoost's Asio and the toolkit's libwxamiga both carry a
+# select() over bsdsocket.library's WaitSelect; for sockets they answer the
+# same, and the toolkit's also counts a file or the console as ready, so
+# that one is kept and Asio's is left out of a copy of libboost_asio.a.
+B="$SDK/lib"
+cp "$B/libboost_asio.a" "$O/libboost_asio.a"
+for m in $(m68k-amigaos-ar t "$O/libboost_asio.a" | grep 'amiga_select'); do m68k-amigaos-ar d "$O/libboost_asio.a" "$m"; done
+objs=$(for f in "$O"/*.o; do echo "$f"; done)
+if m68k-amigaos-g++ -noixemul -m68040 -o "$WORK/GFOpenTorrent" $objs \
+    "$LT_BUILD/libtorrent-rasterbar.a" "$LT_BUILD"/gfot_*.o \
+    -Wl,--start-group "$O/libboost_asio.a" "$B/libboost_filesystem.a" "$B/libboost_system.a" \
+    "$B/libboost_json.a" "$B/libboost_atomic.a" -Wl,--end-group \
+    "$SQLITE_LIB" $("$WX/bin/wx-config" --libs std,net) > "$O/link.log" 2>&1
+then
+    echo "linked $WORK/GFOpenTorrent ($(wc -c < "$WORK/GFOpenTorrent") bytes)"
+else
+    echo "link FAILED; missing:"
+    grep -o "undefined reference to \`[^']*'" "$O/link.log" | sort | uniq -c | sort -rn | head -40
+    grep 'multiple definition' "$O/link.log" | head -5
+    exit 4
+fi

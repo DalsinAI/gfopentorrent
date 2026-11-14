@@ -188,6 +188,9 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra "$HERE/tests/file_list_about_test.cpp" 
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/no_pql_test.cpp" \
     "$HERE/compat/gfot_pql.cpp" -o "$B/no_pql_test"
 "$B/no_pql_test" "$HERE" "$PT/picotorrent"
+# what the Amiga link needs: the file picker, the crash stub, the stove link
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/link_stage_test.cpp" -o "$B/link_stage_test"
+"$B/link_stage_test" "$HERE" "$PT/picotorrent"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"
