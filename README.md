@@ -4,7 +4,7 @@ GFOpenTorrent: BitTorrent client for GFOS (PicoTorrent UI on libtorrent-rasterba
 
 Part of GFOS (AmiCradle). Design: amicradle-teams `designs/` (GFOPENNEWS-20261113.md, GFOPENIRC-20261113.md, and the Team 2 answers of 13 Nov 2026).
 
-Rules: commits are authored and committed by SacredTrees; draw through GFOpenLayout; third-party code keeps its own licence and goes in `third_party/` with its notice (BSD-3-Clause libtorrent is allowed; no GPL, LGPL or MPL code).
+Rules: commits are authored and committed by SacredTrees; draw through GFOpenLayout; third-party code keeps its own licence and goes in `third_party/` with its notice (BSD-3-Clause libtorrent is allowed; no GPL, LGPL or MPL code, apart from wxWidgets as below).
 
 ## Sources
 
@@ -22,13 +22,23 @@ libtorrent 2.0 has no WebTorrent (2.1 adds it, with libdatachannel under
 MPL-2.0). HTTPS trackers go through the gfopentls shim, never GnuTLS.
 The BSD-3 notices go in the About box and the docs.
 
-The UI is drawn through gfopenwxtoolkit (wxWidgets on GFOpenLayout), as
-the 13 Nov brief says. wxWidgets is under the wxWindows Library Licence: the
-LGPL plus an exception that allows binaries, static ones included, under
-the program's own terms. Franklin's licence review of 13 Nov reads it that
-way, so it is not counted as LGPL code here; no wx source is copied into this
-repository. Boost (BSL-1.0), fmt and nlohmann-json (MIT) and SQLite
-(public domain), which PicoTorrent also uses, are permissive.
+The UI is drawn through GFOpenWXToolkit. wxWidgets is a recorded exception
+to the no-LGPL rule (Dale, 14 Nov 2026,
+amicradle-teams `teams/DECISION-WXWIDGETS-EXCEPTION-20261114-1543.md`):
+
+> GFOpenWXToolkit is our AmigaOS port of wxWidgets, pinned to version 3.2.12.
+> wxWidgets itself comes from the upstream project at build time and stays
+> under its own licence; we link to the wxWidgets project
+> (https://www.wxwidgets.org) and aim to stay compatible with it.
+
+Its licence is the wxWindows Library Licence: the LGPL plus an exception
+that allows binaries, static ones included, under the program's own terms.
+The pin, that licence text (LICENSE-wxWindows.txt) and this notice ship with
+every package that contains it. The About box shows the same notice
+(`compat/gfot_about.hpp`, `patches/picotorrent/0010-about-wx-notice.patch`).
+No wx source is copied into this repository. Boost (BSL-1.0), fmt and
+nlohmann-json (MIT) and SQLite (public domain), which PicoTorrent also
+uses, are permissive.
 
 ## libtorrent on AmigaOS
 
