@@ -1,0 +1,43 @@
+GFOpenTorrent: the About box names GFOpenWXToolkit as our port of
+wxWidgets and shows the notice that
+teams/DECISION-WXWIDGETS-EXCEPTION-20261114-1543.md sets (Dale, 14 Nov
+2026), from compat/gfot_about.hpp, word for word as the README has it.
+Under __WXOPENLAYOUT__, Windows' code as it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/dialogs/aboutdialog.cpp b/src/picotorrent/ui/dialogs/aboutdialog.cpp
+index 58d0a86..e208d5c 100644
+--- a/src/picotorrent/ui/dialogs/aboutdialog.cpp
++++ b/src/picotorrent/ui/dialogs/aboutdialog.cpp
+@@ -16,6 +16,9 @@
+ 
+ #include "../../buildinfo.hpp"
+ #include "../translator.hpp"
++#ifdef __WXOPENLAYOUT__
++#include "gfot_about.hpp"
++#endif
+ 
+ using json = nlohmann::json;
+ using pt::UI::Dialogs::AboutDialog;
+@@ -74,12 +77,21 @@ AboutDialog::AboutDialog(wxWindow* parent, wxWindowID id)
+     lv->SetItem(lv->GetItemCount() - 1, 1, SQLITE_VERSION);
+     lv->SetItem(lv->GetItemCount() - 1, 2, "-");
+ 
++#ifdef __WXOPENLAYOUT__
++    // our port of wxWidgets (teams/DECISION-WXWIDGETS-EXCEPTION-20261114-1543.md)
++    lv->InsertItem(lv->GetItemCount(), gfot::about::toolkit_name());
++#else
+     lv->InsertItem(lv->GetItemCount(), "wxWidgets");
++#endif
+     lv->SetItem(lv->GetItemCount() - 1, 1, wxVERSION_NUM_DOT_STRING_T);
+     lv->SetItem(lv->GetItemCount() - 1, 2, "-");
+ 
+     auto desc = new wxTextCtrl(this, wxID_ANY, wxEmptyString, wxDefaultPosition, wxDefaultSize, wxTE_MULTILINE | wxTE_READONLY);
+     desc->AppendText(i18n("picotorrent_description"));
++#ifdef __WXOPENLAYOUT__
++    desc->AppendText("\n\n");
++    desc->AppendText(gfot::about::wx_notice());
++#endif
+ 
+     auto footerSizer = new wxBoxSizer(wxHORIZONTAL);
+     footerSizer->Add(new wxStaticText(this, wxID_ANY, "� 2015-2020"));

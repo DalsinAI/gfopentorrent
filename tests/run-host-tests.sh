@@ -152,3 +152,6 @@ echo "PASS translator.hpp keeps Windows.h inside _WIN32"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"
+# the wxWidgets notice in the README and the About box (patch 0010)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/wx_notice_test.cpp" -o "$B/wx_notice_test"
+"$B/wx_notice_test" "$HERE"
