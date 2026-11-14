@@ -124,3 +124,18 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" -I"$HERE/comp
     "$HERE/tests/environment_test.cpp" "$HERE/compat/picotorrent/environment_amiga.cpp" \
     "$HERE/compat/gfot_env.cpp" "$HERE/compat/gfot_log.cpp" -o "$B/environment_test"
 "$B/environment_test"
+# PicoTorrent's path joins: with patches/picotorrent applied, no fs::path "/"
+# join is left in the sources the build takes (core/environment.cpp and
+# core/utils.cpp are replaced, crashpad, core/geoip/ and src/l10n/ are not
+# built for the Amiga)
+odd=$(grep -rnE ' / ' --include=*.cpp "$PT" | grep -E 'fs::path|Path\(\)|savePath|path\(\)' \
+    | grep -v 'core/environment.cpp:\|crashpadinitializer.cpp:\|core/geoip/\|/l10n/' || true)
+if [ -n "$odd" ]; then
+    echo "FAIL PicoTorrent joins paths with fs::path's /:"; echo "$odd" | head -20; exit 1
+fi
+echo "PASS PicoTorrent joins no paths with fs::path's /"
+# PicoTorrent's Utils on AmigaOS (host: openAndSelect logs the drawer)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" -I"$HERE/compat" -I"$PT" \
+    "$HERE/tests/utils_test.cpp" "$HERE/compat/picotorrent/utils_amiga.cpp" \
+    "$HERE/compat/gfot_env.cpp" "$HERE/compat/gfot_log.cpp" -o "$B/utils_test"
+"$B/utils_test"

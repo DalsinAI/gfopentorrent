@@ -98,6 +98,19 @@ comes from locale.library's default locale, mapped to PicoTorrent's codes
 through the logging shim. The program is portable only, so there is no
 crash reporting and no install check.
 
+## PicoTorrent's utils and path joins
+
+`compat/picotorrent/utils_amiga.cpp` replaces PicoTorrent's Windows-only
+`core/utils.cpp`. "Open in Explorer" opens the drawer that holds the
+torrent's data in Workbench (workbench.library 44, `OpenWorkbenchObjectA`).
+Sizes read as Windows writes them ("1.45 KB", three figures, cut). The wide
+string conversions are UTF-8 both ways, with U+FFFD for a bad byte, and
+no trailing NUL (the Windows one keeps it). `patches/picotorrent/0001`
+joins the save path and the torrent's name the AmigaDOS way, so a download
+drawer at a volume's root gives `Work:name`, not `Work:/name` (the parent
+of the volume). The host tests check that no other `fs::path` "/" join is
+left in the sources the Amiga build takes.
+
 ## Tests
 
     JOBS=4 tests/run-host-tests.sh
