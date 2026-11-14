@@ -1,0 +1,45 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index a07532b..499e81f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -480,6 +480,12 @@ list(TRANSFORM libtorrent_extensions_include_files PREPEND "include/libtorrent/e
+ list(TRANSFORM libtorrent_aux_include_files PREPEND "include/libtorrent/aux_/")
+ list(TRANSFORM libtorrent_kademlia_include_files PREPEND "include/libtorrent/kademlia/")
+ list(TRANSFORM try_signal_sources PREPEND "deps/try_signal/")
++# try_signal guards mmap storage's reads against SIGBUS; a platform with no
++# mmap (AmigaOS) builds without it
++option(try-signal "build deps/try_signal (needed when mmap storage is built)" ON)
++if (NOT try-signal)
++	set(try_signal_sources)
++endif()
+ 
+ # these options control target creation and thus have to be declared before the add_library() call
+ feature_option(BUILD_SHARED_LIBS "build libtorrent as a shared library" ON)
+@@ -586,8 +592,10 @@ set_target_properties(torrent-rasterbar
+ target_include_directories(torrent-rasterbar PUBLIC
+ 	$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+ 	$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+-	PRIVATE deps/try_signal
+ )
++if (try-signal)
++	target_include_directories(torrent-rasterbar PRIVATE deps/try_signal)
++endif()
+ 
+ target_compile_definitions(torrent-rasterbar
+ 	PUBLIC
+diff --git a/src/mmap_storage.cpp b/src/mmap_storage.cpp
+index 9d7ee1f..3d8b77f 100644
+--- a/src/mmap_storage.cpp
++++ b/src/mmap_storage.cpp
+@@ -40,7 +40,11 @@ POSSIBILITY OF SUCH DAMAGE.
+ #include "libtorrent/aux_/storage_utils.hpp"
+ #include "libtorrent/hasher.hpp"
+ 
++// try_signal catches SIGBUS from a mapped file; with no mmap (AmigaOS:
++// libnix has no sigjmp_buf either) neither it nor this file's body is built
++#if TORRENT_HAVE_MMAP || TORRENT_HAVE_MAP_VIEW_OF_FILE
+ #include "try_signal.hpp"
++#endif
+ 
+ #include <ctime>
+ #include <algorithm>

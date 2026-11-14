@@ -9,6 +9,8 @@
 // Copyright (c) 2026 AmiCradle Team. MIT licence (see LICENSE).
 #include <libtorrent/config.hpp>
 #include <libtorrent/enum_net.hpp>
+#include <libtorrent/platform_util.hpp>
+#include <libtorrent/aux_/path.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/session_params.hpp>
 #include <libtorrent/settings_pack.hpp>
@@ -17,6 +19,8 @@
 #include <libtorrent/add_torrent_params.hpp>
 #include <libtorrent/alert_types.hpp>
 #include "gfot_ifq.h"
+#include <libtorrent/aux_/file_pointer.hpp>
+#include <cerrno>
 #include <libtorrent/torrent_status.hpp>
 #include <boost/asio/io_context.hpp>
 #include <chrono>
@@ -52,10 +56,39 @@ static void config_checks()
           && TORRENT_USE_NETLINK == 0 && TORRENT_USE_IFADDRS == 0);
     check("routes through the UDP fallback", TORRENT_USE_UDP_ROUTE == 1 && TORRENT_USE_SYSCTL == 0);
     check("no I2P", TORRENT_USE_I2P == 0);
+    // patch 0004: no /dev/urandom on the Amiga; gfot_entropy() instead
+    check("random from gfot_entropy(), not /dev/urandom or random_device",
+          TORRENT_USE_DEV_RANDOM == 0 && TORRENT_BROKEN_RANDOM_DEVICE == 1);
+    // patch 0004: libnix has no getrlimit()
+    check("no getrlimit, a fixed max_open_files", TORRENT_USE_RLIMIT == 0 && lt::max_open_files() == 10000,
+          std::to_string(lt::max_open_files()));
 }
 
 // GFOpenSocket lists one interface and no loopback: gfot_add_loopback()
 // adds lo0 then, and only then
+// patch 0005: AmigaDOS paths. A volume's colon makes a path complete, and no
+// '/' goes after it ("Work:/x" would be the parent of Work:'s root). POSIX
+// paths, as the host's /tmp, are unchanged.
+static void amiga_path_checks()
+{
+    check("Work:a/b is complete, a/b and /x as before", lt::is_complete("Work:a/b") && !lt::is_complete("a/b")
+          && lt::is_complete("/x") && !lt::is_complete("a/b:c"));
+    check("combine after a volume: Work: + a = Work:a", lt::combine_path("Work:", "a") == "Work:a"
+          && lt::combine_path("Work:d", "a") == "Work:d/a", lt::combine_path("Work:", "a"));
+    std::string b = "T:";
+    lt::append_path(b, "gfot1");
+    check("append after a volume: T: + gfot1 = T:gfot1", b == "T:gfot1", b);
+    check("Work: is a root, with no parent", lt::is_root_path("Work:") && !lt::has_parent_path("Work:")
+          && lt::parent_path("Work:").empty(), lt::parent_path("Work:"));
+    check("the parent of Work:a is Work:", lt::has_parent_path("Work:a") && lt::parent_path("Work:a") == "Work:",
+          lt::parent_path("Work:a"));
+    check("the parent of Work:a/b is Work:a/", lt::parent_path("Work:a/b") == "Work:a/", lt::parent_path("Work:a/b"));
+    check("filename of Work:a and Work:a/b.torrent", lt::filename("Work:a") == "a"
+          && lt::filename("Work:a/b.torrent") == "b.torrent" && lt::filename("Work:").empty());
+    check("complete() leaves T:gfot1 alone (no getcwd)", lt::complete("T:gfot1/x") == "T:gfot1/x");
+    check("current_working_directory() answers", !lt::current_working_directory().empty());
+}
+
 static void loopback_checks()
 {
     gfot_iface rows[3] = {};
@@ -193,9 +226,25 @@ static void transfer(const std::string &dir, bool utp)
           std::to_string(st.num_pieces) + "/" + std::to_string(ti->num_pieces()) + " pieces, " + std::to_string(ms) + " ms");
 }
 
+// patch 0002: libnix's fseek() takes a 32-bit long, so an offset past
+// 2 GiB must fail with EFBIG, not seek somewhere else
+static void seek_checks()
+{
+    FILE *f = std::tmpfile();
+    if (!f) { check("tmpfile for the seek checks", false); return; }
+    errno = 0;
+    int r = lt::aux::portable_fseeko(f, std::int64_t(3) << 30, SEEK_SET);
+    check("seek past 2 GiB refused with EFBIG", r == -1 && errno == EFBIG, std::to_string(r) + " errno " + std::to_string(errno));
+    r = lt::aux::portable_fseeko(f, 1000, SEEK_SET);
+    check("seek within 2 GiB", r == 0 && std::ftell(f) == 1000, std::to_string(r));
+    std::fclose(f);
+}
+
 int main()
 {
     config_checks();
+    amiga_path_checks();
+    seek_checks();
     loopback_checks();
     net_checks();
     char tmpl[] = "/tmp/gfot-XXXXXX";

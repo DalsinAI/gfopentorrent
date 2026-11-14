@@ -1,0 +1,121 @@
+diff --git a/src/path.cpp b/src/path.cpp
+index 998e6f5..c4b4af6 100644
+--- a/src/path.cpp
++++ b/src/path.cpp
+@@ -499,9 +499,26 @@ namespace {
+ 		return f.substr(0, aux::numeric_cast<std::size_t>(ext - &f[0]));
+ 	}
+ 
++#if defined TORRENT_AMIGA
++	// AmigaDOS: "Work:", "T:" or ":" is a volume's root, a path with a ':'
++	// before any '/' is complete, and no '/' goes after the ':' ("Work:/x"
++	// is the parent of Work:'s root)
++	namespace {
++		std::size_t amiga_colon(string_view f)
++		{
++			std::size_t const c = f.find(':');
++			std::size_t const s = f.find('/');
++			return (c != string_view::npos && (s == string_view::npos || c < s)) ? c : string_view::npos;
++		}
++	}
++#endif
++
+ 	bool is_root_path(std::string const& f)
+ 	{
+ 		if (f.empty()) return false;
++#if defined TORRENT_AMIGA
++		if (amiga_colon(f) == f.size() - 1) return true;
++#endif
+ 
+ #if defined(TORRENT_WINDOWS) || defined(TORRENT_OS2)
+ 		// match \\ form
+@@ -579,6 +596,10 @@ namespace {
+ 	{
+ 		if (f.empty()) return false;
+ 		if (is_root_path(f)) return false;
++#if defined TORRENT_AMIGA
++		// "Work:a" has the parent "Work:"
++		if (amiga_colon(f) != string_view::npos) return true;
++#endif
+ 
+ 		int len = int(f.size()) - 1;
+ 		// if the last character is / or \ ignore it
+@@ -616,6 +637,14 @@ namespace {
+ 		}
+ 
+ 		if (f[std::size_t(len)] == '/' || f[std::size_t(len)] == '\\') ++len;
++#if defined TORRENT_AMIGA
++		// no '/' left: the parent of "Work:a" is "Work:"
++		if (len == 0)
++		{
++			std::size_t const c = amiga_colon(f);
++			if (c != string_view::npos && c + 1 < f.size()) return f.substr(0, c + 1);
++		}
++#endif
+ 		return std::string(f.c_str(), std::size_t(len));
+ 	}
+ 
+@@ -627,6 +656,14 @@ namespace {
+ #if defined(TORRENT_WINDOWS) || defined(TORRENT_OS2)
+ 		char const* altsep = std::strrchr(first, '\\');
+ 		if (sep == nullptr || altsep > sep) sep = altsep;
++#endif
++#if defined TORRENT_AMIGA
++		// "Work:a" is the file "a"; a root has no file name
++		if (sep == nullptr)
++		{
++			std::size_t const c = amiga_colon(f);
++			if (c != string_view::npos) return f.substr(c + 1);
++		}
+ #endif
+ 		if (sep == nullptr) return f;
+ 
+@@ -666,6 +703,9 @@ namespace {
+ #define TORRENT_SEPARATOR_CHAR '\\'
+ 		bool const need_sep = branch[branch.size()-1] != '\\'
+ 			&& branch[branch.size()-1] != '/';
++#elif defined TORRENT_AMIGA
++#define TORRENT_SEPARATOR_CHAR '/'
++		bool const need_sep = branch[branch.size()-1] != '/' && branch[branch.size()-1] != ':';
+ #else
+ #define TORRENT_SEPARATOR_CHAR '/'
+ 		bool const need_sep = branch[branch.size()-1] != '/';
+@@ -683,6 +723,8 @@ namespace {
+ 
+ #if defined(TORRENT_WINDOWS) || defined(TORRENT_OS2)
+ 		bool const need_sep = lhs.back() != '\\' && lhs.back() != '/';
++#elif defined TORRENT_AMIGA
++		bool const need_sep = lhs.back() != '/' && lhs.back() != ':';
+ #else
+ 		bool const need_sep = lhs.back() != '/';
+ #endif
+@@ -789,11 +831,20 @@ namespace {
+ #else
+ #define GetCurrentDir_ ::getcwd
+ #endif
++#if defined TORRENT_AMIGA
++		// libnix's getcwd() doesn't allocate (getcwd(nullptr, 0) failed
++		// with errno 7, E2BIG)
++		char buf[1024];
++		if (::getcwd(buf, sizeof(buf)) == nullptr)
++			aux::throw_ex<system_error>(error_code(errno, generic_category()));
++		return convert_from_native_path(buf);
++#else
+ 		auto cwd = GetCurrentDir_(nullptr, 0);
+ 		if (cwd == nullptr)
+ 			aux::throw_ex<system_error>(error_code(errno, generic_category()));
+ 		auto holder = make_free_holder(cwd);
+ 		return convert_from_native_path(cwd);
++#endif
+ #undef GetCurrentDir_
+ 	}
+ 
+@@ -1002,6 +1053,8 @@ namespace {
+ 		if (f.size() >= 2 && f[0] == '\\' && f[1] == '\\')
+ 			return true;
+ 		return false;
++#elif defined TORRENT_AMIGA
++		return f[0] == '/' || amiga_colon(f) != string_view::npos;
+ #else
+ 		return f[0] == '/';
+ #endif
