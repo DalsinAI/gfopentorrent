@@ -57,7 +57,7 @@ for f in $srcs; do
     [ -f "$P/$f.cpp" ] || { echo "FAIL $f: no $f.cpp"; bad=$((bad + 1)); continue; }
     compile "$P/$f.cpp" "$O/$(echo "$f" | tr / _).o"
 done
-for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
+for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http gfot_netif; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
 compile "$O/gfot_migrations.cpp" "$O/gfot_migrations.o"
 echo "picotorrent: $ok compiled, $bad not yet"
 [ "$bad" = 0 ] || exit 3
