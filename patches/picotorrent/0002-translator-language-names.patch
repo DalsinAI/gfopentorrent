@@ -1,0 +1,60 @@
+GFOpenTorrent: PicoTorrent's translator without Windows.h. The language list
+gets each language's own name from compat/gfot_lang.cpp in place of
+GetLocaleInfoEx. Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/translator.cpp b/src/picotorrent/ui/translator.cpp
+index 5361b1d..1da8923 100644
+--- a/src/picotorrent/ui/translator.cpp
++++ b/src/picotorrent/ui/translator.cpp
+@@ -5,6 +5,9 @@
+ #include <sqlite3.h>
+ 
+ #include "../core/utils.hpp"
++#ifndef _WIN32
++#include "gfot_lang.hpp"
++#endif
+ 
+ using json = nlohmann::json;
+ using pt::UI::Translator;
+@@ -56,7 +59,9 @@ int Translator::LoadDatabaseCallback(void* user, int, char** data, char**)
+     std::string loc = data[0];
+     std::string key = data[1];
+     std::wstring val = Utils::toStdWString(data[2]);
++#ifdef _WIN32
+     TCHAR localeNameBuffer[1024];
++#endif
+ 
+     if (tr->m_languages.find(loc) == tr->m_languages.end())
+     {
+@@ -64,6 +69,7 @@ int Translator::LoadDatabaseCallback(void* user, int, char** data, char**)
+         l.locale = loc;
+ 
+ 
++#ifdef _WIN32
+         int res = GetLocaleInfoEx(
+             Utils::toStdWString(l.locale).c_str(),
+             LOCALE_SLOCALIZEDLANGUAGENAME,
+@@ -78,6 +84,10 @@ int Translator::LoadDatabaseCallback(void* user, int, char** data, char**)
+         {
+             BOOST_LOG_TRIVIAL(error) << "GetLocaleInfoEx returned " << res << " for " << l.locale;
+         }
++#else
++        // GFOpenTorrent: the language's own name (compat/gfot_lang.cpp)
++        l.name = Utils::toStdWString(gfot::language_name(l.locale));
++#endif
+ 
+         tr->m_languages.insert({ loc, l });
+     }
+diff --git a/src/picotorrent/ui/translator.hpp b/src/picotorrent/ui/translator.hpp
+index 501e860..10b5bef 100644
+--- a/src/picotorrent/ui/translator.hpp
++++ b/src/picotorrent/ui/translator.hpp
+@@ -1,6 +1,8 @@
+ #pragma once
+ 
++#ifdef _WIN32
+ #include <Windows.h>
++#endif
+ 
+ #include <filesystem>
+ #include <map>

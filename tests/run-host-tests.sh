@@ -139,3 +139,16 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" -I"$HERE/comp
     "$HERE/tests/utils_test.cpp" "$HERE/compat/picotorrent/utils_amiga.cpp" \
     "$HERE/compat/gfot_env.cpp" "$HERE/compat/gfot_log.cpp" -o "$B/utils_test"
 "$B/utils_test"
+# The language list's names (compat/gfot_lang.cpp): one for each lang/*.json
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/lang_test.cpp" \
+    "$HERE/compat/gfot_lang.cpp" -o "$B/lang_test"
+"$B/lang_test" "$WORK/picotorrent/lang"
+# patch 0002 leaves no Windows header in translator.hpp outside _WIN32
+if ! awk '/#include <Windows.h>/ && prev != "#ifdef _WIN32" { bad = 1 } { prev = $0 } END { exit bad }' \
+    "$PT/picotorrent/ui/translator.hpp"; then
+    echo "FAIL translator.hpp includes Windows.h outside _WIN32"; exit 1
+fi
+echo "PASS translator.hpp keeps Windows.h inside _WIN32"
+# the stove scripts parse
+for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
+echo "PASS the build scripts parse"

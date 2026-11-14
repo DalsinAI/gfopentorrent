@@ -1,7 +1,7 @@
 #!/bin/sh
 # GFOpenTorrent: fetch the sources torrent.lock pins into WORK (default
 # ~/.cache/gfopentorrent/src), check each commit, and apply patches/<name>/.
-#   WORK=dir scripts/fetch-sources.sh [libtorrent] [picotorrent]
+#   WORK=dir scripts/fetch-sources.sh [libtorrent] [picotorrent] [fmt] [json]
 # A source already there at the pinned commit is reset and patched again.
 # Copyright (c) 2026 AmiCradle Team. MIT licence.
 set -eu
@@ -41,6 +41,8 @@ for n in $want; do
     picotorrent)
         get picotorrent "$PICOTORRENT_URL" "$PICOTORRENT_TAG" "$PICOTORRENT_COMMIT"
         patch_all picotorrent ;;
+    fmt) get fmt "$FMT_URL" "$FMT_TAG" "$FMT_COMMIT" ;;
+    json) get json "$JSON_URL" "$JSON_TAG" "$JSON_COMMIT" ;;
     *) echo "unknown source $n"; exit 1 ;;
     esac
 done

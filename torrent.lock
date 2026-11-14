@@ -14,3 +14,11 @@ TRY_SIGNAL_COMMIT=105cce59972f925a33aa6b1c3109e4cd3caf583d
 PICOTORRENT_URL=https://github.com/picotorrent/picotorrent
 PICOTORRENT_TAG=v0.25.0
 PICOTORRENT_COMMIT=c2ad8e2d69773293e116ac08e228d21d98a55892
+# PicoTorrent's own libraries, header-only here: fmt (MIT) and nlohmann
+# json (MIT), at the releases vcpkg gave PicoTorrent v0.25.0's time
+FMT_URL=https://github.com/fmtlib/fmt
+FMT_TAG=11.0.2
+FMT_COMMIT=0c9fce2ffefecfdce794e1859584e25877b7b592
+JSON_URL=https://github.com/nlohmann/json
+JSON_TAG=v3.11.3
+JSON_COMMIT=9cca280a4d0ccf0c08f47a99aa71d1b0e52f8d03
