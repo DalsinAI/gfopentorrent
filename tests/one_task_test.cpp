@@ -26,6 +26,8 @@
 #include <boost/asio/steady_timer.hpp>
 #include <chrono>
 #include <cstdio>
+#include <cstdlib>
+#include <exception>
 #ifdef __linux__
 #include <dirent.h>
 #endif
@@ -41,6 +43,39 @@
 
 namespace lt = libtorrent;
 namespace asio = boost::asio;
+
+// Lab runs: stdout to a file is fully buffered, and libnix's abort() drops
+// what waits there, so an abort used to show nothing. Before main()
+// (init_priority 101, ahead of libtorrent's and Asio's statics): stdout
+// unbuffered, and a terminate handler that names the exception on stderr.
+// STEP lines on stderr say how far a run got.
+static void on_terminate()
+{
+    if (std::exception_ptr e = std::current_exception()) {
+        try { std::rethrow_exception(e); }
+        catch (std::exception const &x) { std::fprintf(stderr, "TERMINATE: %s\n", x.what()); }
+        catch (...) { std::fprintf(stderr, "TERMINATE: an exception that is not a std::exception\n"); }
+    } else {
+        std::fprintf(stderr, "TERMINATE: no exception (std::terminate called)\n");
+    }
+    std::fflush(stderr);
+    std::abort();
+}
+struct early_setup {
+    early_setup()
+    {
+        std::setvbuf(stdout, nullptr, _IONBF, 0);
+        std::set_terminate(on_terminate);
+        std::fputs("STEP static setup\n", stderr);
+        std::fflush(stderr);
+    }
+};
+static early_setup early_setup_ __attribute__((init_priority(101)));
+static void step_line(const std::string &what)
+{
+    std::fprintf(stderr, "STEP %s\n", what.c_str());
+    std::fflush(stderr);
+}
 
 static int failed = 0;
 static void check(const char *what, bool ok, const std::string &detail = std::string())
@@ -107,6 +142,7 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
     std::vector<char> buf;
     lt::bencode(std::back_inserter(buf), ct.generate());
     auto ti = std::make_shared<lt::torrent_info>(buf, lt::from_span);
+    step_line(kind + ": torrent made");
 
     asio::io_context io;
     lt::session_params pa(pack(utp, lsd)), pb(pack(utp, lsd));
@@ -114,6 +150,7 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
     pb.disk_io_constructor = lt::posix_disk_io_constructor;
     auto a = std::make_unique<lt::session>(std::move(pa), io);
     auto b = std::make_unique<lt::session>(std::move(pb), io);
+    step_line(kind + ": sessions made");
 
     int max_threads = threads_now(), port = 0, pieces = 0;
     bool done = false, timeout = false;
@@ -131,6 +168,7 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
                 if (auto *l = lt::alert_cast<lt::listen_succeeded_alert>(al))
                     if ((l->socket_type == lt::socket_type_t::utp) == utp) port = l->port;
             if (port) {
+                step_line(kind + ": seed listens on " + std::to_string(port));
                 lt::add_torrent_params p;
                 p.ti = ti;
                 p.save_path = seed;
@@ -163,6 +201,7 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
     };
     asio::post(io, step);
     io.run();
+    step_line(kind + ": loop ended");
     check((kind + ": seed listens").c_str(), port != 0, std::to_string(port));
     check((kind + ": 300 KB on one task, hashes checked").c_str(), done && pieces == ti->num_pieces(),
           std::to_string(pieces) + "/" + std::to_string(ti->num_pieces()) + " pieces, " + std::to_string(ms) + " ms"
@@ -208,6 +247,7 @@ static void lookup_on_one_task()
 
 int main()
 {
+    step_line("main");
     check("one thread at start", threads_now() == 1, std::to_string(threads_now()));
 #if defined __amigaos__ || defined __AMIGA__
     const char *dir = "T:gfot1";
@@ -222,6 +262,7 @@ int main()
         run_transfer(dir, false);
         run_transfer(dir, false, true);
     }
+    step_line("lookup");
     lookup_on_one_task();
     std::printf("one_task_test: %d failed\n", failed);
     return failed ? 1 : 0;
