@@ -22,6 +22,14 @@ libtorrent 2.0 has no WebTorrent (2.1 adds it, with libdatachannel under
 MPL-2.0). HTTPS trackers go through the gfopentls shim, never GnuTLS.
 The BSD-3 notices go in the About box and the docs.
 
+The UI is drawn through gfopenwxtoolkit (wxWidgets on GFOpenLayout), as
+the 13 Nov brief says. wxWidgets is under the wxWindows Library Licence: the
+LGPL plus an exception that allows binaries, static ones included, under
+the program's own terms. Franklin's licence review of 13 Nov reads it that
+way, so it is not counted as LGPL code here; no wx source is copied into this
+repository. Boost (BSL-1.0), fmt and nlohmann-json (MIT) and SQLite
+(public domain), which PicoTorrent also uses, are permissive.
+
 ## libtorrent on AmigaOS
 
 `patches/libtorrent/0001-amiga-platform.patch` fills in libtorrent's Amiga
@@ -77,6 +85,19 @@ stderr until `gfot::log::add_file_log(path)` names a file. Wide text is
 written as UTF-8. There is no lock, because the program runs on one task. The Amiga
 `environment.cpp` calls `add_file_log` in place of Boost.Log's setup.
 
+## PicoTorrent's environment
+
+`compat/picotorrent/environment_amiga.cpp` replaces PicoTorrent's
+Windows-only `core/environment.cpp`. Everything lives in the program's
+drawer, `PROGDIR:`, the way a portable PicoTorrent works on Windows:
+`PicoTorrent.sqlite`, `coredb.sqlite`, `logs/` and `Downloads/`.
+`ENV:GFOpenTorrent/Downloads` names another download drawer. The language
+comes from locale.library's default locale, mapped to PicoTorrent's codes
+(`compat/gfot_env.cpp`). Paths are joined the AmigaDOS way
+(`PROGDIR:logs`, not `PROGDIR:/logs`). `Create()` opens the log file
+through the logging shim. The program is portable only, so there is no
+crash reporting and no install check.
+
 ## Tests
 
     JOBS=4 tests/run-host-tests.sh
@@ -96,7 +117,9 @@ Boost given the same change as GFOpenBoost's patch 0005) and runs
 one `io.run()`, while a timer checks the process never has a second thread.
 UDP on the Amiga itself is checked by GFOpenBoost's `UDPLT`.
 Last, it checks that PicoTorrent's sources use no Boost.Log beyond what
-the shim gives, and runs `tests/log_shim_test.cpp`.
+the shim gives, and runs `tests/log_shim_test.cpp` and
+`tests/environment_test.cpp` (the drawer and language come from
+`GFOT_PROGDIR` and `GFOT_LANGUAGE` there).
 
 `tools/lab-probe/build-amiga.sh` builds `IfqProbe` on the stove: what
 `compat/gfot_ifq_amiga.c` gets from the stack, for a lab run (it needs
