@@ -32,6 +32,7 @@ cp "$HERE/compat/picotorrent/environment_amiga.cpp" "$P/src/picotorrent/core/env
 cp "$HERE/compat/picotorrent/utils_amiga.cpp" "$P/src/picotorrent/core/utils.cpp"
 cp "$HERE/compat/picotorrent/ipc_server_amiga.cpp" "$P/src/picotorrent/ipc/server.cpp"
 cp "$HERE/compat/picotorrent/httpclient_amiga.cpp" "$P/src/picotorrent/http/httpclient.cpp"
+cp "$HERE/compat/picotorrent/pqltorrentfilter_amiga.cpp" "$P/src/picotorrent/ui/filters/pqltorrentfilter.cpp"
 sed -e "s/@GITVERSION_VAR_SHORTSHA@/$(echo "$PICOTORRENT_COMMIT" | cut -c1-8)/g" -e 's/@[A-Za-z_]*@/0/g' \
     "$P/src/picotorrent/buildinfo.cpp.in" > "$P/src/picotorrent/buildinfo.cpp"
 CXXF="-noixemul -m68040 -O2 -std=gnu++17 $("$WX/bin/wx-config" --cxxflags) -DFMT_HEADER_ONLY -DBOOST_ALL_NO_LIB
@@ -57,7 +58,7 @@ for f in $srcs; do
     [ -f "$P/$f.cpp" ] || { echo "FAIL $f: no $f.cpp"; bad=$((bad + 1)); continue; }
     compile "$P/$f.cpp" "$O/$(echo "$f" | tr / _).o"
 done
-for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http gfot_netif; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
+for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http gfot_netif gfot_pql; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
 compile "$O/gfot_migrations.cpp" "$O/gfot_migrations.o"
 echo "picotorrent: $ok compiled, $bad not yet"
 [ "$bad" = 0 ] || exit 3

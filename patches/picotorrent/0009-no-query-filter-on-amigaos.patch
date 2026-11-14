@@ -1,0 +1,34 @@
+GFOpenTorrent: no query filter on AmigaOS, so no console for it.
+PicoTorrent's query language (PQL) runs on the ANTLR4 C++ runtime, which
+is not in the tree; compat/picotorrent/pqltorrentfilter_amiga.cpp (copied
+over ui/filters/pqltorrentfilter.cpp by the build) gives no filter and
+says why. MainFrame keeps the console that takes queries hidden and its
+View menu item off. Under __WXOPENLAYOUT__, Windows' code as it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/mainframe.cpp b/src/picotorrent/ui/mainframe.cpp
+index 9b9af9c..b26219a 100644
+--- a/src/picotorrent/ui/mainframe.cpp
++++ b/src/picotorrent/ui/mainframe.cpp
+@@ -115,12 +115,21 @@ MainFrame::MainFrame(std::shared_ptr<pt::Core::Environment> env, std::shared_ptr
+     // Set checked on menu items
+     m_menuItemConsoleInput->SetCheckable(true);
+     m_menuItemConsoleInput->Check(m_cfg->Get<bool>("ui.show_console_input").value());
++#ifdef __WXOPENLAYOUT__
++    // no query filter on AmigaOS (compat/picotorrent/pqltorrentfilter_amiga.cpp)
++    m_menuItemConsoleInput->Check(false);
++    m_menuItemConsoleInput->Enable(false);
++#endif
+     m_menuItemDetailsPanel->SetCheckable(true);
+     m_menuItemDetailsPanel->Check(m_cfg->Get<bool>("ui.show_details_panel").value());
+     m_menuItemStatusBar->SetCheckable(true);
+     m_menuItemStatusBar->Check(m_cfg->Get<bool>("ui.show_status_bar").value());
+ 
++#ifdef __WXOPENLAYOUT__
++    m_console->Hide();
++#else
+     if (!m_cfg->Get<bool>("ui.show_console_input").value()) { m_console->Hide(); }
++#endif
+     if (!m_cfg->Get<bool>("ui.show_details_panel").value()) { m_splitter->Unsplit(); }
+     if (!m_cfg->Get<bool>("ui.show_status_bar").value()) { m_statusBar->Hide(); }
+ 

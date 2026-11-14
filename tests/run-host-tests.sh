@@ -184,6 +184,10 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/prefs_pag
 # the file list and the About box without Windows (patch 0008)
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra "$HERE/tests/file_list_about_test.cpp" -o "$B/file_list_about_test"
 "$B/file_list_about_test" "$PT/picotorrent/ui"
+# no query filter on AmigaOS (patch 0009)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/no_pql_test.cpp" \
+    "$HERE/compat/gfot_pql.cpp" -o "$B/no_pql_test"
+"$B/no_pql_test" "$HERE" "$PT/picotorrent"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"
