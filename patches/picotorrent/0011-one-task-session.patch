@@ -1,0 +1,88 @@
+GFOpenTorrent: PicoTorrent on one task. A bsdsocket.library base belongs to
+the task that opened it, so the session runs on the program's own
+io_context (no network thread), with posix disk I/O and no hashing or disk
+threads; main() runs wxEntry inside that io_context, a wx timer polls it
+while the UI waits, and saving at the end polls for alerts instead of
+waiting (compat/gfot_loop.cpp). Under __WXOPENLAYOUT__, Windows' code as
+it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/bittorrent/session.cpp b/src/picotorrent/bittorrent/session.cpp
+index 0e1886c..e515bad 100644
+--- a/src/picotorrent/bittorrent/session.cpp
++++ b/src/picotorrent/bittorrent/session.cpp
+@@ -18,6 +18,10 @@
+ #include <libtorrent/torrent_info.hpp>
+ #include <libtorrent/torrent_status.hpp>
+ #include <libtorrent/write_resume_data.hpp>
++#ifdef __WXOPENLAYOUT__
++#include <libtorrent/posix_disk_io.hpp>
++#include "gfot_loop.hpp"
++#endif
+ #include <wx/sstream.h>
+ #include <wx/wfstream.h>
+ #include <wx/zipstrm.h>
+@@ -275,7 +279,18 @@ Session::Session(wxEvtHandler* parent, std::shared_ptr<pt::Core::Database> db, s
+     sp.settings = getSettingsPack(cfg);
+     sp.ip_filter = ipf;
+ 
++#ifdef __WXOPENLAYOUT__
++    // One task: the session runs on the program's own io_context (no network
++    // thread), disk work and hashing on it too, and a wx timer polls it while
++    // the UI waits (compat/gfot_loop.cpp)
++    sp.settings.set_int(lt::settings_pack::hashing_threads, 0);
++    sp.settings.set_int(lt::settings_pack::aio_threads, 0);
++    sp.disk_io_constructor = lt::posix_disk_io_constructor;
++    m_session = std::make_unique<lt::session>(sp, gfot::loop::io());
++    gfot::loop::start_pump();
++#else
+     m_session = std::make_unique<lt::session>(sp);
++#endif
+     m_session->add_extension(&lt::create_ut_metadata_plugin);
+     m_session->add_extension(&lt::create_smart_ban_plugin);
+ 
+@@ -325,6 +340,9 @@ Session::~Session()
+     if (m_filterLoader.joinable()) m_filterLoader.join();
+ 
+     m_session->set_alert_notify([] {});
++#ifdef __WXOPENLAYOUT__
++    gfot::loop::stop_pump();
++#endif
+     m_timer->Stop();
+     m_resumeDataTimer->Stop();
+ 
+@@ -1058,7 +1076,12 @@ void Session::SaveTorrents()
+ 
+     while (numOutstandingResumeData > 0)
+     {
++#ifdef __WXOPENLAYOUT__
++        // waiting would stop the one task the session runs on: poll it
++        lt::alert const* tmp = gfot::loop::wait_for_alert(*m_session, 10000);
++#else
+         lt::alert const* tmp = m_session->wait_for_alert(lt::seconds(10));
++#endif
+         if (tmp == nullptr) { continue; }
+ 
+         std::vector<lt::alert*> alerts;
+diff --git a/src/picotorrent/main.cpp b/src/picotorrent/main.cpp
+index 96fa445..c99c148 100644
+--- a/src/picotorrent/main.cpp
++++ b/src/picotorrent/main.cpp
+@@ -5,4 +5,17 @@
+ 
+ #include "application.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++// GFOpenTorrent: the whole program runs inside libtorrent's io_context, on
++// one task (compat/gfot_loop.cpp)
++#include "gfot_loop.hpp"
++
++wxIMPLEMENT_APP_NO_MAIN(pt::Application);
++
++int main(int argc, char** argv)
++{
++    return gfot::loop::run_inside(&wxEntry, argc, argv);
++}
++#else
+ wxIMPLEMENT_APP(pt::Application);
++#endif

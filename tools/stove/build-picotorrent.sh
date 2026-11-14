@@ -72,7 +72,7 @@ for f in $srcs; do
     [ -f "$P/$f.cpp" ] || { echo "FAIL $f: no $f.cpp"; bad=$((bad + 1)); continue; }
     compile "$P/$f.cpp" "$O/$(echo "$f" | tr / _).o"
 done
-for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http gfot_netif gfot_pql gfot_sqlvfs; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
+for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db gfot_http gfot_netif gfot_pql gfot_sqlvfs gfot_loop; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
 compile "$O/gfot_migrations.cpp" "$O/gfot_migrations.o"
 for c in openfiledialog_amiga crashpadinitializer_amiga; do compile "$HERE/compat/picotorrent/$c.cpp" "$O/$c.o"; done
 if m68k-amigaos-gcc -noixemul -m68040 -O2 -c "$HERE/compat/gfot_posix.c" -o "$O/gfot_posix.o" 2> "$O/gfot_posix.o.err"

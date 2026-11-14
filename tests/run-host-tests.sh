@@ -188,6 +188,9 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra "$HERE/tests/file_list_about_test.cpp" 
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/no_pql_test.cpp" \
     "$HERE/compat/gfot_pql.cpp" -o "$B/no_pql_test"
 "$B/no_pql_test" "$HERE" "$PT/picotorrent"
+# one task: the program inside libtorrent's io_context (patch 0011)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/one_loop_test.cpp" -o "$B/one_loop_test"
+"$B/one_loop_test" "$HERE" "$PT/picotorrent"
 # what the Amiga link needs: the file picker, the crash stub, the stove link
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/link_stage_test.cpp" -o "$B/link_stage_test"
 "$B/link_stage_test" "$HERE" "$PT/picotorrent"
