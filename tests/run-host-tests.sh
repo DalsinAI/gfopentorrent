@@ -110,3 +110,27 @@ ${CXX:-g++} -std=c++17 -O1 -I"$OV" -DTORRENT_AMIGA_HOST_TEST -DBOOST_ASIO_DISABL
     "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o" \
     -pthread -o "$B1/one_task_test"
 "$B1/one_task_test"
+
+# ---- PicoTorrent's logging without Boost.Log (compat/boostlog)
+sh "$HERE/scripts/fetch-sources.sh" picotorrent
+PT="$WORK/picotorrent/src"
+# every log line in PicoTorrent must be BOOST_LOG_TRIVIAL(<a level the shim
+# has>) and include only trivial.hpp; core/environment.cpp's add_file_log
+# setup (Windows-only) and crashpadinitializer.cpp (not built) are the
+# exceptions, replaced in the Amiga port
+odd=$(grep -rn 'BOOST_LOG\|boost/log\|boost::log' "$PT" \
+    | grep -v 'core/environment.cpp:\|crashpadinitializer.cpp:' \
+    | grep -v 'BOOST_LOG_TRIVIAL(\(trace\|debug\|info\|warning\|error\|fatal\))' \
+    | grep -v '#include <boost/log/trivial.hpp>' || true)
+if [ -n "$odd" ]; then
+    echo "FAIL PicoTorrent uses Boost.Log beyond the shim:"; echo "$odd" | head -20; exit 1
+fi
+echo "PASS PicoTorrent uses only BOOST_LOG_TRIVIAL ($(grep -rc 'BOOST_LOG_TRIVIAL(' "$PT" | awk -F: '{s+=$2} END {print s}') lines)"
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" "$HERE/tests/log_shim_test.cpp" \
+    "$HERE/compat/gfot_log.cpp" -o "$B/log_shim_test"
+"$B/log_shim_test"
+# PicoTorrent's Environment on AmigaOS (host: GFOT_PROGDIR, GFOT_LANGUAGE)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat/boostlog" -I"$HERE/compat" -I"$PT" \
+    "$HERE/tests/environment_test.cpp" "$HERE/compat/picotorrent/environment_amiga.cpp" \
+    "$HERE/compat/gfot_env.cpp" "$HERE/compat/gfot_log.cpp" -o "$B/environment_test"
+"$B/environment_test"
