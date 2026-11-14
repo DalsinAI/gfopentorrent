@@ -141,11 +141,45 @@ static lt::settings_pack pack(bool utp, bool lsd = false)
     p.set_bool(lt::settings_pack::enable_outgoing_tcp, !utp);
     p.set_bool(lt::settings_pack::enable_incoming_tcp, !utp);
     p.set_bool(lt::settings_pack::allow_multiple_connections_per_ip, true);
-    p.set_int(lt::settings_pack::alert_mask, lt::alert_category::error | lt::alert_category::status);
+    p.set_int(lt::settings_pack::alert_mask, lt::alert_category::error | lt::alert_category::status
+        | lt::alert_category::storage | lt::alert_category::connect | lt::alert_category::peer);
     // hashing on the network thread, no hasher threads
     p.set_int(lt::settings_pack::hashing_threads, 0);
     p.set_int(lt::settings_pack::aio_threads, 0);
     return p;
+}
+
+// Print what the sessions report, so a lab run that moves no piece says
+// why: the first 60 alerts of each kind of test, then only a count.
+static void show_alerts(const std::string &kind, const char *who, std::vector<lt::alert *> const &as, int &shown)
+{
+    for (auto *al : as) {
+        if (shown++ >= 60) continue;
+        std::fprintf(stderr, "ALERT %s %s: %s\n", kind.c_str(), who, al->message().c_str());
+    }
+    std::fflush(stderr);
+}
+
+static const char *state_name(lt::torrent_status::state_t s)
+{
+    switch (s) {
+    case lt::torrent_status::checking_files: return "checking_files";
+    case lt::torrent_status::downloading_metadata: return "downloading_metadata";
+    case lt::torrent_status::downloading: return "downloading";
+    case lt::torrent_status::finished: return "finished";
+    case lt::torrent_status::seeding: return "seeding";
+    case lt::torrent_status::checking_resume_data: return "checking_resume_data";
+    default: return "?";
+    }
+}
+
+static std::string status_line(lt::torrent_handle const &h)
+{
+    lt::torrent_status st = h.status();
+    std::string e = st.errc ? st.errc.message() : std::string("none");
+    return std::string(state_name(st.state)) + ", " + std::to_string(st.num_pieces) + " pieces, "
+        + std::to_string(st.num_peers) + " peers, paused " + (st.flags & lt::torrent_flags::paused ? "yes" : "no")
+        + ", error " + e;
 }
 
 static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
@@ -181,7 +215,9 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
     step_line(kind + ": sessions made");
 
     int max_threads = threads_now(), port = 0, pieces = 0;
-    bool done = false, timeout = false;
+    bool done = false, timeout = false, seed_ready = false;
+    int shown = 0, connects = 0;
+    std::string seed_end = "not added", leech_end = "not added";
     lt::torrent_handle ha, hb;
     auto t0 = std::chrono::steady_clock::now(), last = t0 - std::chrono::seconds(2);
     long ms = 0;
@@ -192,6 +228,7 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
         std::vector<lt::alert *> as;
         if (!port) {
             a->pop_alerts(&as);
+            show_alerts(kind, "seed", as, shown);
             for (auto *al : as)
                 if (auto *l = lt::alert_cast<lt::listen_succeeded_alert>(al))
                     if ((l->socket_type == lt::socket_type_t::utp) == utp) port = l->port;
@@ -208,8 +245,15 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
             }
         } else {
             a->pop_alerts(&as);
+            show_alerts(kind, "seed", as, shown);
+            as.clear();
             b->pop_alerts(&as);
+            show_alerts(kind, "leech", as, shown);
             lt::torrent_status st = hb.status();
+            if (!seed_ready && ha.status().is_seeding) {
+                seed_ready = true;
+                step_line(kind + ": seed has checked its file");
+            }
             pieces = st.num_pieces;
             if (st.is_seeding) done = true;
             // connect once the seed has checked its file, and again each
@@ -219,17 +263,27 @@ static void run_transfer(const std::string &dir, bool utp, bool lsd = false)
             if (!done && ha.status().is_seeding && st.num_peers == 0 && now - last >= std::chrono::seconds(1)) {
                 hb.connect_peer(lt::tcp::endpoint(lt::make_address("127.0.0.1"), std::uint16_t(port)));
                 last = now;
+                if (connects++ < 3) step_line(kind + ": leech connects to 127.0.0.1:" + std::to_string(port));
             }
         }
         ms = long(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - t0).count());
         if (ms > 60000) timeout = true;
-        if (done || timeout) { io.stop(); return; }
+        if (done || timeout) {
+            // status() is a call into the session: make it here, on the
+            // loop, as one outside io.run() would wait for ever
+            if (ha.is_valid()) seed_end = status_line(ha);
+            if (hb.is_valid()) leech_end = status_line(hb);
+            io.stop();
+            return;
+        }
         tick.expires_after(std::chrono::milliseconds(50));
         tick.async_wait([&](boost::system::error_code const &) { step(); });
     };
     asio::post(io, step);
     io.run();
-    step_line(kind + ": loop ended");
+    step_line(kind + ": loop ended after " + std::to_string(shown) + " alerts, " + std::to_string(connects) + " connects");
+    step_line(kind + ": seed " + seed_end);
+    step_line(kind + ": leech " + leech_end);
     check((kind + ": seed listens").c_str(), port != 0, std::to_string(port));
     check((kind + ": 300 KB on one task, hashes checked").c_str(), done && pieces == ti->num_pieces(),
           std::to_string(pieces) + "/" + std::to_string(ti->num_pieces()) + " pieces, " + std::to_string(ms) + " ms"
