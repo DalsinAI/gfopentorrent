@@ -9,6 +9,7 @@
 // Copyright (c) 2026 AmiCradle Team. MIT licence (see LICENSE).
 #include <libtorrent/config.hpp>
 #include <libtorrent/enum_net.hpp>
+#include <libtorrent/platform_util.hpp>
 #include <libtorrent/session.hpp>
 #include <libtorrent/session_params.hpp>
 #include <libtorrent/settings_pack.hpp>
@@ -54,6 +55,9 @@ static void config_checks()
           && TORRENT_USE_NETLINK == 0 && TORRENT_USE_IFADDRS == 0);
     check("routes through the UDP fallback", TORRENT_USE_UDP_ROUTE == 1 && TORRENT_USE_SYSCTL == 0);
     check("no I2P", TORRENT_USE_I2P == 0);
+    // patch 0004: libnix has no getrlimit()
+    check("no getrlimit, a fixed max_open_files", TORRENT_USE_RLIMIT == 0 && lt::max_open_files() == 10000,
+          std::to_string(lt::max_open_files()));
 }
 
 // GFOpenSocket lists one interface and no loopback: gfot_add_loopback()

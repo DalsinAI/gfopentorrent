@@ -70,6 +70,11 @@ and a seek or size past 2 GiB fails with EFBIG.
 mmap there's nothing to catch, and libnix has no `sigjmp_buf`. Patch 0003
 adds a `try-signal` CMake option, and the Amiga build turns it off.
 
+**What libnix lacks.** `compat/gfot_pio.c` gives libtorrent `pread()` and
+`pwrite()` (seek, read or write, seek back; safe on one task), and patch
+0004 turns off `getrlimit()` (`TORRENT_USE_RLIMIT 0`), so
+`max_open_files()` gives a fixed number.
+
 **No peer encryption yet.** libtorrent is built with `-Dencryption=OFF`
 (no OpenSSL, no GnuTLS), which also turns off protocol encryption (PE/MSE).
 Peers that insist on it won't connect. PE needs only RC4 and a

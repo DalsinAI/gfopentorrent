@@ -65,6 +65,10 @@ ${CC:-gcc} -std=gnu99 -O1 -Wall -I"$HERE/compat" -o "$B/ifqprobe" "$HERE/tests/i
     "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o"
 "$B/ifqprobe"
 
+# pread()/pwrite() for libnix (compat/gfot_pio.c)
+${CC:-gcc} -std=gnu99 -O1 -Wall -Wextra -I"$HERE/compat" -o "$B/pio_test" "$HERE/tests/pio_test.c" "$HERE/compat/gfot_pio.c"
+"$B/pio_test"
+
 # ---- one task: Asio's threads off, and the host's Boost given GFOpenBoost's
 # patch 0005 (async_resolve without a worker thread) in an overlay
 OV="$WORK/../boost-overlay"
