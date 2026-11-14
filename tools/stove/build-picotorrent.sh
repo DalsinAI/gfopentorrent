@@ -39,6 +39,8 @@ CXXF="-noixemul -m68040 -O2 -std=gnu++17 $("$WX/bin/wx-config" --cxxflags) -DFMT
  -I$S/json/include -idirafter $SQLITE_INCLUDE"
 O="$WORK/picotorrent-obj"
 mkdir -p "$O"
+# the database migrations, which Windows keeps as resources
+sh "$HERE/tools/stove/gen-migrations.sh" "$P" "$O/gfot_migrations.cpp"
 # PicoTorrent's own list of sources (CMakeLists.txt), less the ones not
 # built here; then this repository's
 srcs=$(sed -n '/^add_executable(/,/^)/p' "$P/CMakeLists.txt" | grep -oE '^ *src/picotorrent/[A-Za-z0-9_/]+' \
@@ -54,6 +56,7 @@ for f in $srcs; do
     [ -f "$P/$f.cpp" ] || { echo "FAIL $f: no $f.cpp"; bad=$((bad + 1)); continue; }
     compile "$P/$f.cpp" "$O/$(echo "$f" | tr / _).o"
 done
-for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
+for c in gfot_env gfot_log gfot_lang gfot_rexx gfot_settings gfot_notray gfot_disk gfot_db; do compile "$HERE/compat/$c.cpp" "$O/$c.o"; done
+compile "$O/gfot_migrations.cpp" "$O/gfot_migrations.o"
 echo "picotorrent: $ok compiled, $bad not yet"
 [ "$bad" = 0 ] || exit 3
