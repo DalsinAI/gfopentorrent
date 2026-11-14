@@ -1,0 +1,67 @@
+GFOpenTorrent: no Windows resources for the console's and the About box's
+icons. Windows loads ICO_TERMINAL and AppIcon from resources.rc; on
+AmigaOS that gave an error box at start ("Failed to load image from file
+ICO_TERMINAL"), so both come from the toolkit's wxArtProvider. The
+console's stray printf goes too. Under __WXOPENLAYOUT__, Windows' code as
+it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/console.cpp b/src/picotorrent/ui/console.cpp
+index d944098..c646903 100644
+--- a/src/picotorrent/ui/console.cpp
++++ b/src/picotorrent/ui/console.cpp
+@@ -1,5 +1,9 @@
+ #include "console.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++#include <wx/artprov.h>
++#endif
++
+ #include "filters/pqltorrentfilter.hpp"
+ #include "ids.hpp"
+ #include "models/torrentlistmodel.hpp"
+@@ -17,10 +21,17 @@ Console::Console(wxWindow* parent, wxWindowID id, pt::UI::Models::TorrentListMod
+     m_input->SetFont(
+         wxFont(9, wxFONTFAMILY_TELETYPE, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, wxT("Consolas")));
+ 
++#ifdef __WXOPENLAYOUT__
++    // no Windows resources: the toolkit's own art
++    wxIcon funnel = wxArtProvider::GetIcon(wxART_FIND, wxART_OTHER, FromDIP(wxSize(16, 16)));
++#else
+     wxIcon funnel(L"ICO_TERMINAL", wxBITMAP_TYPE_ICO_RESOURCE, FromDIP(16), FromDIP(16));
++#endif
+ 
++#ifndef __WXOPENLAYOUT__
+     int i = FromDIP(16);
+     printf("%d", i);
++#endif
+ 
+     wxBoxSizer* sizer = new wxBoxSizer(wxHORIZONTAL);
+     sizer->Add(new wxStaticBitmap(this, wxID_ANY, funnel), 0, wxALIGN_CENTER | wxLEFT, FromDIP(4));
+diff --git a/src/picotorrent/ui/dialogs/aboutdialog.cpp b/src/picotorrent/ui/dialogs/aboutdialog.cpp
+index b7702b0..a26c317 100644
+--- a/src/picotorrent/ui/dialogs/aboutdialog.cpp
++++ b/src/picotorrent/ui/dialogs/aboutdialog.cpp
+@@ -16,6 +16,9 @@
+ #include <wx/statbmp.h>
+ #include <wx/sizer.h>
+ #include <wx/version.h>
++#ifdef __WXOPENLAYOUT__
++#include <wx/artprov.h>
++#endif
+ 
+ #include "../../buildinfo.hpp"
+ #include "../translator.hpp"
+@@ -26,7 +29,12 @@ using pt::UI::Dialogs::AboutDialog;
+ AboutDialog::AboutDialog(wxWindow* parent, wxWindowID id)
+     : wxDialog(parent, id, i18n("about_picotorrent"), wxDefaultPosition, wxDefaultSize, wxDEFAULT_DIALOG_STYLE | wxRESIZE_BORDER)
+ {
++#ifdef __WXOPENLAYOUT__
++    // no Windows resources: the toolkit's own art
++    wxIcon icon = wxArtProvider::GetIcon(wxART_INFORMATION, wxART_MESSAGE_BOX, wxSize(128, 128));
++#else
+     wxIcon icon(L"AppIcon", wxBITMAP_TYPE_ICO_RESOURCE, 128, 128);
++#endif
+     auto bmp = new wxStaticBitmap(this, wxID_ANY, icon);
+ 
+     auto lv = new wxListView(this);
