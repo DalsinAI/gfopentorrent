@@ -155,6 +155,10 @@ odd=$(grep -rnE 'std::string [A-Za-z_]+ = [^;]*\.(GetText|GetNextToken|GetValue|
 if [ -n "$odd" ]; then
     echo "FAIL a std::string is made from a wxString without ToStdString():"; echo "$odd" | head -20; exit 1
 fi
+odd=$(grep -rnE 'GetItemText\([^)]*\)(;|\.c_str\(\))' --include=*.cpp "$PT" || true)
+if [ -n "$odd" ]; then
+    echo "FAIL a list item's text is used as a std::string without ToStdString():"; echo "$odd" | head -20; exit 1
+fi
 echo "PASS every std::string from a wxString goes through ToStdString()"
 # One copy at a time over ARexx, and the tray settings (patch 0004)
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/single_copy_test.cpp" \
@@ -173,6 +177,10 @@ ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/db_functi
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/http_plugin_test.cpp" \
     "$HERE/compat/gfot_http.cpp" -o "$B/http_plugin_test"
 "$B/http_plugin_test" "$PT/picotorrent/api/libpico.cpp"
+# the Preferences pages without Windows' headers (patch 0007)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/prefs_pages_test.cpp" \
+    "$HERE/compat/gfot_netif.cpp" -o "$B/prefs_pages_test"
+"$B/prefs_pages_test" "$PT/picotorrent/ui/dialogs"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"

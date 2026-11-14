@@ -1,0 +1,215 @@
+GFOpenTorrent: the Preferences pages without Windows' headers.
+- listeninterfacedialog: the adapter list from libtorrent's
+  enum_net_interfaces (the TCP/IP stack's interfaces) through
+  compat/gfot_netif.cpp, in place of GetAdaptersAddresses
+- preferencesconnectionpage: no WinSock headers (none of it is used);
+  a list item's text goes through ToStdString()
+- preferencesdialog: the restart prompt is a wxMessageDialog with the
+  same choice, in place of TaskDialogIndirect
+- preferencesgeneralpage: no start-up list to join on AmigaOS (a program
+  starts with Workbench when its icon is in SYS:WBStartup), so the "start
+  with Windows" box is hidden and never set
+- preferencesadvancedpage: MAKE_PROP no longer pastes a token onto '<'
+  (GCC refuses it; Get<t3> is the same on every compiler)
+Each AmigaOS change sits under __WXOPENLAYOUT__, Windows' code as it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/ui/dialogs/listeninterfacedialog.cpp b/src/picotorrent/ui/dialogs/listeninterfacedialog.cpp
+index 6a34913..daed0f7 100644
+--- a/src/picotorrent/ui/dialogs/listeninterfacedialog.cpp
++++ b/src/picotorrent/ui/dialogs/listeninterfacedialog.cpp
+@@ -2,9 +2,16 @@
+ 
+ #include <sstream>
+ 
++#ifdef __WXOPENLAYOUT__
++#include <libtorrent/enum_net.hpp>
++#include <libtorrent/io_context.hpp>
++
++#include "gfot_netif.hpp"
++#else
+ #include <WinSock2.h>
+ #include <WS2tcpip.h>
+ #include <iphlpapi.h>
++#endif
+ 
+ #include <wx/hyperlink.h>
+ #include <wx/statbmp.h>
+@@ -131,6 +138,35 @@ void ListenInterfaceDialog::LoadAdapters()
+         m_adapters->GetCount(),
+         new ClientData<NetworkAdapter>(any6));
+ 
++#ifdef __WXOPENLAYOUT__
++    // the TCP/IP stack's interfaces, through libtorrent (compat/gfot_netif.cpp)
++    {
++        lt::io_context ios;
++        lt::error_code ec;
++        std::vector<gfot::netif::iface> ifs;
++        for (lt::ip_interface const& i : lt::enum_net_interfaces(ios, ec))
++        {
++            gfot::netif::iface n;
++            n.address = i.interface_address.to_string();
++            n.v6 = i.interface_address.is_v6();
++            n.up = bool(i.flags & lt::if_flags::up);
++            n.loopback = i.interface_address.is_loopback() || bool(i.flags & lt::if_flags::loopback);
++            n.name = i.name;
++            n.friendly_name = i.friendly_name;
++            ifs.push_back(n);
++        }
++        for (gfot::netif::adapter const& a : gfot::netif::adapters(ifs))
++        {
++            NetworkAdapter na;
++            na.address = a.address;
++            na.name = a.name;
++            m_adapters->Insert(
++                na.name,
++                m_adapters->GetCount(),
++                new ClientData<NetworkAdapter>(na));
++        }
++    }
++#else
+     static constexpr int MAX_GETADAPTERSADDRESSES_TRIES = 10;
+     static constexpr int INITIAL_BUFFER_SIZE = 15000;
+ 
+@@ -214,4 +250,5 @@ void ListenInterfaceDialog::LoadAdapters()
+             }
+         }
+     }
++#endif
+ }
+diff --git a/src/picotorrent/ui/dialogs/preferencesadvancedpage.cpp b/src/picotorrent/ui/dialogs/preferencesadvancedpage.cpp
+index b835277..4a8e761 100644
+--- a/src/picotorrent/ui/dialogs/preferencesadvancedpage.cpp
++++ b/src/picotorrent/ui/dialogs/preferencesadvancedpage.cpp
+@@ -24,7 +24,7 @@ struct Property
+         { \
+             []() { return new wx ##t1 ##Property(label); },\
+             description, \
+-            [](Configuration* cfg, wxPGProperty* prop) { prop->SetValue(cfg->Get<##t3>(key).value()); }, \
++            [](Configuration* cfg, wxPGProperty* prop) { prop->SetValue(cfg->Get<t3>(key).value()); }, \
+             [](Configuration* cfg, wxPGProperty* prop) { cfg->Set(key, prop->GetValue().Get ##t2()); } \
+         } \
+     }
+diff --git a/src/picotorrent/ui/dialogs/preferencesconnectionpage.cpp b/src/picotorrent/ui/dialogs/preferencesconnectionpage.cpp
+index 8c110f3..fd061a6 100644
+--- a/src/picotorrent/ui/dialogs/preferencesconnectionpage.cpp
++++ b/src/picotorrent/ui/dialogs/preferencesconnectionpage.cpp
+@@ -2,9 +2,12 @@
+ 
+ #include <sstream>
+ 
++#ifdef __WXOPENLAYOUT__
++#else
+ #include <WinSock2.h>
+ #include <WS2tcpip.h>
+ #include <iphlpapi.h>
++#endif
+ 
+ #include <wx/filepicker.h>
+ #include <wx/listctrl.h>
+@@ -165,8 +168,8 @@ PreferencesConnectionPage::PreferencesConnectionPage(wxWindow* parent, std::shar
+             long sel = m_listenInterfaces->GetFirstSelected();
+             if (sel < 0) { return; }
+ 
+-            std::string address = m_listenInterfaces->GetItemText(sel);
+-            int port = std::atoi(m_listenInterfaces->GetItemText(sel, 1).c_str());
++            std::string address = m_listenInterfaces->GetItemText(sel).ToStdString();
++            int port = std::atoi(m_listenInterfaces->GetItemText(sel, 1).ToStdString().c_str());
+ 
+             ListenInterfaceDialog dlg(this, wxID_ANY, address, port);
+ 
+@@ -208,9 +211,9 @@ void PreferencesConnectionPage::Save(bool* restartRequired)
+     for (int i = 0; i < m_listenInterfaces->GetItemCount(); i++)
+     {
+         Core::Configuration::ListenInterface li;
+-        li.address = m_listenInterfaces->GetItemText(i, 0);
++        li.address = m_listenInterfaces->GetItemText(i, 0).ToStdString();
+         li.id = reinterpret_cast<Item*>(m_listenInterfaces->GetItemData(i))->id;
+-        li.port = std::atoi(m_listenInterfaces->GetItemText(i, 1).c_str());
++        li.port = std::atoi(m_listenInterfaces->GetItemText(i, 1).ToStdString().c_str());
+ 
+         m_cfg->UpsertListenInterface(li);
+     }
+diff --git a/src/picotorrent/ui/dialogs/preferencesdialog.cpp b/src/picotorrent/ui/dialogs/preferencesdialog.cpp
+index c6b87ac..0e5e235 100644
+--- a/src/picotorrent/ui/dialogs/preferencesdialog.cpp
++++ b/src/picotorrent/ui/dialogs/preferencesdialog.cpp
+@@ -1,6 +1,10 @@
+ #include "preferencesdialog.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++#include <wx/msgdlg.h>
++#else
+ #include <CommCtrl.h>
++#endif
+ 
+ #include <wx/bookctrl.h>
+ #include <wx/listbook.h>
+@@ -155,6 +159,12 @@ void PreferencesDialog::ShowRestartRequiredDialog()
+     std::wstring main = i18n("prompt_restart");
+     std::wstring title = i18n("prompt_restart_title");
+ 
++#ifdef __WXOPENLAYOUT__
++    // Windows' task dialog, as a message dialog with the same choice
++    wxMessageDialog dlg(this, wxString(main), wxString(title), wxOK | wxCANCEL | wxICON_INFORMATION);
++    dlg.SetOKCancelLabels(wxString(btn), wxID_CANCEL);
++    m_wantsRestart = (dlg.ShowModal() == wxID_OK);
++#else
+     const TASKDIALOG_BUTTON pButtons[] =
+     {
+         { 1000, btn.c_str() },
+@@ -177,4 +187,5 @@ void PreferencesDialog::ShowRestartRequiredDialog()
+     TaskDialogIndirect(&tdf, &pnButton, &pnRadioButton, &pfVerificationFlagChecked);
+ 
+     m_wantsRestart = (pnButton == 1000);
++#endif
+ }
+diff --git a/src/picotorrent/ui/dialogs/preferencesgeneralpage.cpp b/src/picotorrent/ui/dialogs/preferencesgeneralpage.cpp
+index dd40788..c226486 100644
+--- a/src/picotorrent/ui/dialogs/preferencesgeneralpage.cpp
++++ b/src/picotorrent/ui/dialogs/preferencesgeneralpage.cpp
+@@ -1,6 +1,9 @@
+ #include "preferencesgeneralpage.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++#else
+ #include <strsafe.h>
++#endif
+ 
+ #include <boost/log/trivial.hpp>
+ 
+@@ -9,6 +12,16 @@
+ #include "../../core/utils.hpp"
+ #include "../translator.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++// AmigaOS has no start-up list for a program to join (a program starts
++// with Workbench when its icon is in SYS:WBStartup), so the box is hidden
++struct AutoRunKey
++{
++    void Create() {}
++    void Delete() {}
++    bool Exists() { return false; }
++};
++#else
+ struct AutoRunKey
+ {
+     AutoRunKey()
+@@ -77,6 +90,7 @@ struct AutoRunKey
+ private:
+     HKEY m_key;
+ };
++#endif
+ 
+ using pt::Core::Configuration;
+ using pt::UI::Dialogs::PreferencesGeneralPage;
+@@ -99,6 +113,9 @@ PreferencesGeneralPage::PreferencesGeneralPage(wxWindow* parent, std::shared_ptr
+     m_labelColor = new wxCheckBox(miscSizer->GetStaticBox(), wxID_ANY, i18n("use_label_color_as_background_in_torrent_list"));
+     m_skipAddTorrentDialog = new wxCheckBox(miscSizer->GetStaticBox(), wxID_ANY, i18n("skip_add_torrent_dialog"));
+     m_autoStart = new wxCheckBox(miscSizer->GetStaticBox(), wxID_ANY, i18n("start_with_windows"));
++#ifdef __WXOPENLAYOUT__
++    m_autoStart->Hide();
++#endif
+     m_startPosition = new wxChoice(miscSizer->GetStaticBox(), wxID_ANY);
+ 
+     miscGrid->AddGrowableCol(1, 1);
