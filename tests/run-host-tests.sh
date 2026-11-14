@@ -169,6 +169,10 @@ sh "$HERE/tools/stove/gen-migrations.sh" "$WORK/picotorrent" "$B/gfot_migrations
 ${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/db_functions_test.cpp" \
     "$HERE/compat/gfot_db.cpp" "$B/gfot_migrations.cpp" -o "$B/db_functions_test"
 "$B/db_functions_test" "$WORK/picotorrent/res/dbmigrations"
+# a plugin's HTTP request, and libpico without DLLs (patch 0006)
+${CXX:-g++} -std=c++17 -O1 -Wall -Wextra -I"$HERE/compat" "$HERE/tests/http_plugin_test.cpp" \
+    "$HERE/compat/gfot_http.cpp" -o "$B/http_plugin_test"
+"$B/http_plugin_test" "$PT/picotorrent/api/libpico.cpp"
 # the stove scripts parse
 for f in "$HERE"/tools/*/*.sh "$HERE"/scripts/*.sh; do sh -n "$f" || { echo "FAIL $f does not parse"; exit 1; }; done
 echo "PASS the build scripts parse"

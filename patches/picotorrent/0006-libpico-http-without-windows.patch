@@ -1,0 +1,101 @@
+GFOpenTorrent: libpico and its HTTP client without Windows.
+AmigaOS has no DLLs: IPlugin::Load gives no plugin (Application only
+looks for Plugin*.dll), and the plugin C API stays as it is with the
+module as its init function. http/httpclient.hpp declares the client on
+the toolkit's wxWebRequest (compat/picotorrent/httpclient_amiga.cpp, which
+the build copies over httpclient.cpp; WinHTTP's code stays for Windows).
+libpico_mainwnd_native_handle gives the toolkit's handle. Each change
+sits under __WXOPENLAYOUT__, Windows' code as it was.
+Copyright (c) 2026 AmiCradle Team. MIT licence.
+
+diff --git a/src/picotorrent/api/libpico.cpp b/src/picotorrent/api/libpico.cpp
+index a56ef51..8b40da8 100644
+--- a/src/picotorrent/api/libpico.cpp
++++ b/src/picotorrent/api/libpico.cpp
+@@ -1,6 +1,16 @@
+ #include "libpico_impl.hpp"
+ 
++#ifdef __WXOPENLAYOUT__
++// No DLLs on AmigaOS: a plugin's module is its init function, and
++// IPlugin::Load finds none (Application only looks for Plugin*.dll)
++typedef libpico_init_t HMODULE;
++static libpico_init_t GetProcAddress(HMODULE module, const char*)
++{
++    return module;
++}
++#else
+ #include <Windows.h>
++#endif
+ 
+ #include <vector>
+ 
+@@ -78,10 +88,15 @@ IPlugin::~IPlugin()
+ 
+ IPlugin* IPlugin::Load(fs::path const& p, pt::Core::Environment* env, pt::Core::Configuration* cfg)
+ {
++#ifdef __WXOPENLAYOUT__
++    (void)p; (void)env; (void)cfg;
++    return nullptr;
++#else
+     return new Plugin(
+         LoadLibrary(p.wstring().c_str()),
+         env,
+         cfg);
++#endif
+ }
+ 
+ libpico_result_t libpico_config_get(libpico_plugin_t* plugin, libpico_config_t** config)
+@@ -167,7 +182,12 @@ libpico_result_t libpico_i18n(const char* key, wchar_t* target, size_t* len)
+ 
+ libpico_result_t libpico_mainwnd_native_handle(libpico_mainwnd_t* wnd, void** handle)
+ {
++#ifdef __WXOPENLAYOUT__
++    // the toolkit's native handle: the frame's Intuition window
++    *handle = reinterpret_cast<void*>(reinterpret_cast<pt::UI::MainFrame*>(wnd)->GetHandle());
++#else
+     *handle = reinterpret_cast<pt::UI::MainFrame*>(wnd)->GetHWND();
++#endif
+     return libpico_ok;
+ }
+ 
+diff --git a/src/picotorrent/http/httpclient.hpp b/src/picotorrent/http/httpclient.hpp
+index 60fd5cc..e02285d 100644
+--- a/src/picotorrent/http/httpclient.hpp
++++ b/src/picotorrent/http/httpclient.hpp
+@@ -5,8 +5,16 @@
+ #include <wx/wx.h>
+ #endif
+ 
++#ifdef __WXOPENLAYOUT__
++#include <functional>
++#include <map>
++#include <string>
++
++class wxWebRequestEvent;
++#else
+ #include <Windows.h>
+ #include <winhttp.h>
++#endif
+ 
+ #include <memory>
+ 
+@@ -28,10 +36,19 @@ namespace Http
+ 
+         void Get(wxString const& url, std::function<void(int, std::string const&)> const& callback);
+     private:
++#ifdef __WXOPENLAYOUT__
++        // on the toolkit's wxWebRequest (compat/picotorrent/httpclient_amiga.cpp)
++        struct Pending;
++        void OnRequestState(wxWebRequestEvent& evt);
++
++        std::map<int, std::shared_ptr<Pending>> m_pending;
++        int m_nextId = 1;
++#else
+         static std::wstring ReadHeader(HINTERNET hRequest, DWORD dwHeader);
+         static void CALLBACK StatusCallbackProxy(HINTERNET hInternet, DWORD_PTR dwContext, DWORD dwInternetStatus, LPVOID lpStatusInformation, DWORD dwStatusInformationLength);
+ 
+         HINTERNET m_session;
++#endif
+     };
+ }
+ }
