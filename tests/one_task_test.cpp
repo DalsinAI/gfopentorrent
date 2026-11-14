@@ -77,6 +77,29 @@ static void step_line(const std::string &what)
     std::fflush(stderr);
 }
 
+#if !defined __amigaos__ && !defined __AMIGA__
+// The Amiga's names are IPv4 only: GFOpenBoost's inet_pton() answers
+// EAFNOSUPPORT for AF_INET6 (compat/src/amiga_net.c), so an IPv6 literal
+// libtorrent parses becomes a throw. Here this inet_pton() stands in for the
+// C library's, as GFOpenBoost's, so the host meets the same (lsd.cpp's
+// IPv6 group parsed at start-up aborted OneTask before main on the Amiga).
+#include <arpa/inet.h>
+#include <cerrno>
+extern "C" int inet_pton(int af, const char *src, void *dst)
+{
+    if (af != AF_INET) { errno = EAFNOSUPPORT; return -1; }
+    unsigned v[4];
+    char tail;
+    if (std::sscanf(src, "%u.%u.%u.%u%c", &v[0], &v[1], &v[2], &v[3], &tail) != 4) return 0;
+    unsigned char *b = static_cast<unsigned char *>(dst);
+    for (int i = 0; i < 4; i++) {
+        if (v[i] > 255) return 0;
+        b[i] = static_cast<unsigned char>(v[i]);
+    }
+    return 1;
+}
+#endif
+
 static int failed = 0;
 static void check(const char *what, bool ok, const std::string &detail = std::string())
 {

@@ -72,12 +72,12 @@ fi
 cp "$B/libtorrent-rasterbar.a" "$OUT/"
 
 CF="-noixemul -m68040 -O2"
-for c in gfot_ifq_amiga gfot_ifq_common gfot_pio gfot_pio_amiga; do
+for c in gfot_ifq_amiga gfot_ifq_common gfot_pio gfot_pio_amiga gfot_entropy; do
     m68k-amigaos-gcc $CF -std=gnu99 -Wall -I"$HERE/compat" -c "$HERE/compat/$c.c" -o "$B/$c.o"
 done
 rm -f "$OUT/libgfotcompat.a"
 m68k-amigaos-ar rcs "$OUT/libgfotcompat.a" "$B/gfot_ifq_amiga.o" "$B/gfot_ifq_common.o" \
-    "$B/gfot_pio.o" "$B/gfot_pio_amiga.o"
+    "$B/gfot_pio.o" "$B/gfot_pio_amiga.o" "$B/gfot_entropy.o"
 
 LIBS="$OUT/libtorrent-rasterbar.a $OUT/libgfotcompat.a -L$SDK/lib -lboost_asio -lsocket -lpthread -latomic -lm"
 # libtorrent's own compile definitions, so the test sees its structs

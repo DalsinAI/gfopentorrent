@@ -83,6 +83,18 @@ adds a `try-signal` CMake option, and the Amiga build turns it off.
 0004 turns off `getrlimit()` (`TORRENT_USE_RLIMIT 0`), so
 `max_open_files()` gives a fixed number.
 
+**IPv4-only names.** GFOpenBoost's `inet_pton()` refuses AF_INET6, so
+libtorrent's IPv6 literal for the LSD group, parsed at start-up, threw before
+`main()`; patch 0004 builds it from its bytes. `one_task_test` gives the host
+the same IPv4-only `inet_pton()`, so a start-up parse like that fails there too.
+
+**Randomness.** AmigaOS has no `/dev/urandom`, and libstdc++'s
+`random_device` has nothing to read. Patch 0004 points libtorrent's
+`crypto_random_bytes()` at `compat/gfot_entropy.c`: timing noise (time,
+CPU clock, EClock, free memory, a counter) through SplitMix64. That's
+enough for peer and DHT IDs and tokens, but not for keys; a real source can
+come from GFOpenTLS.
+
 **No peer encryption yet.** libtorrent is built with `-Dencryption=OFF`
 (no OpenSSL, no GnuTLS), which also turns off protocol encryption (PE/MSE).
 Peers that insist on it won't connect. PE needs only RC4 and a

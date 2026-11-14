@@ -52,12 +52,12 @@ if [ -z "$a" ] || [ "$a" != "$b" ]; then
     echo "FAIL struct gfot_iface differs between compat/gfot_ifq.h and patch 0001"; exit 1
 fi
 echo "PASS struct gfot_iface the same in compat/gfot_ifq.h and patch 0001"
-for c in gfot_ifq_host gfot_ifq_common; do
+for c in gfot_ifq_host gfot_ifq_common gfot_entropy; do
     ${CC:-gcc} -std=gnu99 -O1 -Wall -c "$HERE/compat/$c.c" -o "$B/$c.o"
 done
 ${CXX:-g++} -std=c++17 -O1 -DTORRENT_AMIGA_HOST_TEST $(lt_defs "$B") \
     -I"$LT/include" -I"$HERE/compat" "$HERE/tests/amiga_host_test.cpp" "$B/libtorrent-rasterbar.a" \
-    "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o" \
+    "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o" "$B/gfot_entropy.o" \
     -pthread -o "$B/amiga_host_test"
 "$B/amiga_host_test"
 # the lab probe, against the host's interfaces
@@ -65,6 +65,9 @@ ${CC:-gcc} -std=gnu99 -O1 -Wall -I"$HERE/compat" -o "$B/ifqprobe" "$HERE/tests/i
     "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o"
 "$B/ifqprobe"
 
+# libtorrent's random source on the Amiga (compat/gfot_entropy.c)
+${CC:-gcc} -std=gnu99 -O1 -Wall -Wextra -o "$B/entropy_test" "$HERE/tests/entropy_test.c" "$HERE/compat/gfot_entropy.c"
+"$B/entropy_test"
 # pread()/pwrite() for libnix (compat/gfot_pio.c)
 ${CC:-gcc} -std=gnu99 -O1 -Wall -Wextra -I"$HERE/compat" -o "$B/pio_test" "$HERE/tests/pio_test.c" "$HERE/compat/gfot_pio.c"
 "$B/pio_test"
@@ -107,7 +110,7 @@ cmake --build "$B1" --target torrent-rasterbar -j "$JOBS" > "$B1/build.log" 2>&1
     || { grep -E 'error' "$B1/build.log" | head -40; exit 1; }
 ${CXX:-g++} -std=c++17 -O1 -I"$OV" -DTORRENT_AMIGA_HOST_TEST -DBOOST_ASIO_DISABLE_THREADS $(lt_defs "$B1") \
     -I"$LT/include" -I"$HERE/compat" "$HERE/tests/one_task_test.cpp" "$B1/libtorrent-rasterbar.a" \
-    "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o" \
+    "$B/gfot_ifq_host.o" "$B/gfot_ifq_common.o" "$B/gfot_entropy.o" \
     -pthread -o "$B1/one_task_test"
 "$B1/one_task_test"
 

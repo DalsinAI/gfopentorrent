@@ -55,6 +55,9 @@ static void config_checks()
           && TORRENT_USE_NETLINK == 0 && TORRENT_USE_IFADDRS == 0);
     check("routes through the UDP fallback", TORRENT_USE_UDP_ROUTE == 1 && TORRENT_USE_SYSCTL == 0);
     check("no I2P", TORRENT_USE_I2P == 0);
+    // patch 0004: no /dev/urandom on the Amiga; gfot_entropy() instead
+    check("random from gfot_entropy(), not /dev/urandom or random_device",
+          TORRENT_USE_DEV_RANDOM == 0 && TORRENT_BROKEN_RANDOM_DEVICE == 1);
     // patch 0004: libnix has no getrlimit()
     check("no getrlimit, a fixed max_open_files", TORRENT_USE_RLIMIT == 0 && lt::max_open_files() == 10000,
           std::to_string(lt::max_open_files()));
