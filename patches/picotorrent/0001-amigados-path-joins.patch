@@ -1,0 +1,46 @@
+diff --git a/src/picotorrent/ui/mainframe.cpp b/src/picotorrent/ui/mainframe.cpp
+index bd93655..13b5a81 100644
+--- a/src/picotorrent/ui/mainframe.cpp
++++ b/src/picotorrent/ui/mainframe.cpp
+@@ -26,6 +26,7 @@
+ #include "../core/environment.hpp"
+ #include "../core/utils.hpp"
+ #include "../ipc/server.hpp"
++#include "gfot_env.hpp"
+ #include "console.hpp"
+ #include "dialogs/aboutdialog.hpp"
+ #include "dialogs/addmagnetlinkdialog.hpp"
+@@ -213,7 +214,9 @@ MainFrame::MainFrame(std::shared_ptr<pt::Core::Environment> env, std::shared_ptr
+             for (auto const& sel : m_selection)
+             {
+                 auto status = sel.second->Status();
+-                fs::path p = fs::path(status.savePath) / status.name;
++                // AmigaDOS: "Work:" + name is "Work:name"; fs::path's "/" would give
++                // "Work:/name", the parent of the volume
++                fs::path p = fs::path(gfot::env::join(status.savePath, status.name));
+                 if (fs::exists(p)) { Utils::openAndSelect(p); }
+             }
+         }, ptID_MAIN_TORRENT_LIST);
+diff --git a/src/picotorrent/ui/torrentcontextmenu.cpp b/src/picotorrent/ui/torrentcontextmenu.cpp
+index 9791342..8801d98 100644
+--- a/src/picotorrent/ui/torrentcontextmenu.cpp
++++ b/src/picotorrent/ui/torrentcontextmenu.cpp
+@@ -8,6 +8,7 @@
+ #include "../bittorrent/torrentstatus.hpp"
+ #include "../core/configuration.hpp"
+ #include "../core/utils.hpp"
++#include "gfot_env.hpp"
+ #include "translator.hpp"
+ 
+ namespace fs = std::filesystem;
+@@ -229,8 +230,8 @@ TorrentContextMenu::TorrentContextMenu(wxWindow* parent, std::shared_ptr<pt::Cor
+             auto torrent = selectedTorrents.front();
+             auto status = torrent->Status();
+ 
+-            fs::path savePath = wxString::FromUTF8(status.savePath).ToStdWstring();
+-            fs::path path = savePath / wxString::FromUTF8(status.name).ToStdWstring();
++            // AmigaDOS join, as in mainframe.cpp; both names stay UTF-8
++            fs::path path(gfot::env::join(status.savePath, status.name));
+ 
+             Utils::openAndSelect(path);
+         },
